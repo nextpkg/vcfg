@@ -3,9 +3,9 @@ package watcher
 import (
 	"fmt"
 	"log/slog"
-	"sync/atomic"
 
 	"github.com/nextpkg/vcfg/source"
+	"go.uber.org/atomic"
 )
 
 type (
@@ -51,19 +51,21 @@ func (w *Watcher) OnChange(callback Event) {
 
 // Watch starts monitoring configuration changes from the specified sources.
 // It takes a list of sources and a callback function to handle the change events.
-func (w *Watcher) Watch(sources []source.Source, callback func([]Event) error) {
+func (w *Watcher) Watch(sources []source.Source, callback func([]Event) error) error {
 	ok := w.isWatching.CompareAndSwap(false, true)
 	if ok {
-		return
+		return nil
 	}
 
-	errChan := make(chan error, len(sources))
+	hasError := atomic.NewError(nil)
 	for _, src := range sources {
 		// Start a goroutine to monitor changes for each source.
 		go func(src source.Source) {
 			ch, err := src.Watch()
 			if err != nil {
-				errChan <- fmt.Errorf("failed to watch source %s: %v", src.String(), err)
+				hasError.Store()
+				hasError.Store(true)
+				fmt.Errorf("failed to watch source %s: %v", src.String(), err)
 				return
 			}
 
