@@ -1,7 +1,9 @@
 package vcfg
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"sync"
 
@@ -16,7 +18,7 @@ import (
 type ConfigManager[T any] struct {
 	sources []source.Source
 	viper   *viper.Viper
-	watcher *watcher.Watcher
+	watcher *watcher.Watcher[T]
 	mu      sync.RWMutex
 }
 
@@ -25,7 +27,7 @@ func NewManager[T any](providers ...source.Source) *ConfigManager[T] {
 	return &ConfigManager[T]{
 		sources: providers,
 		viper:   viper.New(),
-		watcher: watcher.New(),
+		watcher: watcher.New[T](),
 	}
 }
 
@@ -84,11 +86,13 @@ func (cm *ConfigManager[T]) AddSource(source source.Source) {
 }
 
 // LoadAndWatch 加载配置并开始监听变更
-func (cm *ConfigManager[T]) LoadAndWatch(onChange watcher.Event) error {
+func (cm *ConfigManager[T]) LoadAndWatch(onChange watcher.Event[T]) error {
 	cfg, err := cm.Load()
 	if err != nil {
 		return err
 	}
+
+	onChange(cfg)
 
 	// 注册回调以便在配置变更时更新
 	cm.watcher.OnChange(func(a any) error {
@@ -166,7 +170,5 @@ func (cm *ConfigManager[T]) Watch() error {
 		return nil
 	}
 
-	cm.watcher.Watch(cm.sources, callback)
-
-	return nil
+	return cm.watcher.Watch(cm.sources, callback)
 }

@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/nextpkg/vcfg"
-	"github.com/nextpkg/vcfg/provider"
+	"github.com/nextpkg/vcfg/source"
 	"github.com/spf13/viper"
 )
 
