@@ -10,7 +10,7 @@ type Source interface {
 	String() string
 	// Watch monitors configuration changes
 	// and notifies via a callback function when changes occur
-	Watch() (<-chan bool, error)
+	Watch() (<-chan struct{}, error)
 	// Stop stops monitoring configuration changes
 	Stop() error
 }

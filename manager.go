@@ -97,11 +97,9 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	return &cfg, nil
 }
 
-// watch starts monitoring changes of all configuration sources
+// startWatch starts monitoring changes of all configuration sources
 // It sets up a callback that reloads configurations when changes are detected
-// Returns:
-//   - An error if setting up the watcher fails
-func (cm *ConfigManager[T]) watch() error {
+func (cm *ConfigManager[T]) startWatch() {
 	callback := func(events []watcher.Event[*T]) error {
 		// Reload configuration from all sources
 		err := cm.loadSource()
@@ -128,7 +126,7 @@ func (cm *ConfigManager[T]) watch() error {
 		return nil
 	}
 
-	return cm.watcher.Watch(cm.sources, callback)
+	cm.watcher.Watch(cm.sources, callback)
 }
 
 // Get returns the current configuration value

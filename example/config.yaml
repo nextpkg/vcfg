@@ -1,7 +1,7 @@
 server:
   host: localhost
-  port: 8080
-  protocol: http1
+  port: 8081
+  protocol: http
 
 database:
   host: db.example.com

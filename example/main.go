@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/nextpkg/vcfg"
 	"github.com/spf13/viper"
@@ -52,7 +53,7 @@ func (c *AppConfig) Validate() error {
 
 func main() {
 	// 创建配置管理器，添加多个配置源
-	cfg := vcfg.MustInitFile[AppConfig]("config.yaml")
+	cfg := vcfg.MustInitFile[AppConfig]("example/config.yaml")
 
 	appCfg := cfg.Get()
 
@@ -70,6 +71,16 @@ func main() {
 	fmt.Printf("日志配置: 级别=%s, 格式=%s\n",
 		appCfg.Logger.Level,
 		appCfg.Logger.Format)
+
+	for {
+		time.Sleep(1 * time.Second)
+
+		appCfg = cfg.Get()
+		fmt.Printf("服务器配置: %s:%d (%s)\n",
+			appCfg.Server.Host,
+			appCfg.Server.Port,
+			appCfg.Server.Protocol)
+	}
 }
 
 // 自定义配置源示例

@@ -2,7 +2,6 @@ package vcfg
 
 import (
 	"github.com/nextpkg/vcfg/source"
-	"github.com/nextpkg/vcfg/source/file"
 )
 
 // MustInit initializes a new ConfigManager with the provided sources
@@ -10,7 +9,7 @@ import (
 // If any error occurs during initialization, it will panic
 // Parameters:
 //   - enableWatching: if true, enables automatic configuration reloading when source changes
-//   - sources: one or more configuration sources to load and watch
+//   - sources: one or more configuration sources to load and WatchStart
 //
 // Returns:
 //   - A fully initialized ConfigManager instance
@@ -32,15 +31,12 @@ func MustInit[T any](enableWatching bool, sources ...source.Source) *ConfigManag
 		})
 
 		// Start monitoring
-		err = cm.watch()
-		if err != nil {
-			panic(err)
-		}
+		cm.startWatch()
 	}
 
 	return cm
 }
 
 func MustInitFile[T any](path string) *ConfigManager[T] {
-	return MustInit[T](false, file.NewFileSource(path))
+	return MustInit[T](true, source.NewFileSource(path))
 }
