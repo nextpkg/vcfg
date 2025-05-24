@@ -1,4 +1,4 @@
-package xmemory
+package memory
 
 import "github.com/spf13/viper"
 

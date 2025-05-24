@@ -1,10 +1,7 @@
 package vcfg
 
 import (
-	"errors"
 	"fmt"
-	"log"
-	"reflect"
 	"sync"
 
 	"github.com/nextpkg/vcfg/ce"
@@ -12,27 +9,41 @@ import (
 	"github.com/nextpkg/vcfg/internal/viper"
 	"github.com/nextpkg/vcfg/internal/watcher"
 	"github.com/nextpkg/vcfg/source"
+	"go.uber.org/atomic"
 )
 
-// ConfigManager is a config manager
+// ConfigManager is a config manager that handles configuration loading, validation, and watching
+// It supports generic configuration types through the type parameter T
+// ConfigManager provides thread-safe access to configuration values
 type ConfigManager[T any] struct {
 	sources []source.Source
 	viper   *viper.Viper
 	watcher *watcher.Watcher[T]
+	cfg     atomic.Value
 	mu      sync.RWMutex
 }
 
-// NewManager create a new config manager
-func NewManager[T any](providers ...source.Source) *ConfigManager[T] {
+// newManager creates a new config manager with the provided configuration sources
+// It initializes the internal viper and watcher components
+// Parameters:
+//   - sources: one or more configuration sources to manage
+//
+// Returns:
+//   - A new ConfigManager instance
+func newManager[T any](sources ...source.Source) *ConfigManager[T] {
 	return &ConfigManager[T]{
-		sources: providers,
+		sources: sources,
 		viper:   viper.New(),
 		watcher: watcher.New[T](),
 	}
 }
 
-// Load config from sources, validate and return config struct
-func (cm *ConfigManager[T]) Load() (*T, error) {
+// load loads config from sources, validates and returns the config struct
+// This method is thread-safe through mutex locking
+// Returns:
+//   - A pointer to the loaded and validated configuration
+//   - An error if loading or validation fails
+func (cm *ConfigManager[T]) load() (*T, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -45,16 +56,19 @@ func (cm *ConfigManager[T]) Load() (*T, error) {
 	return cm.loadConfig()
 }
 
-// loadSource load all config source, merge config to viper
+// loadSource loads all config sources and merges configurations into viper
+// It reads from each source and combines the configurations
+// Returns:
+//   - An error if reading from any source or merging configurations fails
 func (cm *ConfigManager[T]) loadSource() error {
 	for _, src := range cm.sources {
-		// 读取配置
+		// Read configuration
 		cfg, err := src.Read()
 		if err != nil {
 			return fmt.Errorf("%w: %w read from source %s", ce.ErrLoadProviderFailed, err, src.String())
 		}
 
-		// 合并配置
+		// Merge configuration
 		err = cm.viper.Merge(cfg)
 		if err != nil {
 			return err
@@ -64,7 +78,10 @@ func (cm *ConfigManager[T]) loadSource() error {
 	return nil
 }
 
-// loadConfig unmarshal config to struct and validate
+// loadConfig unmarshals the configuration from viper into a struct and validates it
+// Returns:
+//   - A pointer to the unmarshaled and validated configuration
+//   - An error if unmarshaling or validation fails
 func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	var cfg T
 	err := cm.viper.Unmarshal(&cfg)
@@ -80,90 +97,31 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	return &cfg, nil
 }
 
-// AddSource add a config source to config manager
-func (cm *ConfigManager[T]) AddSource(source source.Source) {
-	cm.sources = append(cm.sources, source)
-}
-
-// LoadAndWatch 加载配置并开始监听变更
-func (cm *ConfigManager[T]) LoadAndWatch(onChange watcher.Event[T]) error {
-	cfg, err := cm.Load()
-	if err != nil {
-		return err
-	}
-
-	onChange(cfg)
-
-	// 注册回调以便在配置变更时更新
-	cm.watcher.OnChange(func(a any) error {
-		onChange(a)
-	})
-
-	//// 使用反射将新配置复制到提供的 cfg 中
-	//		return updateConfig(cfg, newCfg)
-
-	// 开始监听
-	return cm.Watch()
-}
-
-// updateConfig 使用反射将源配置复制到目标配置
-func updateConfig(target, source any) error {
-	targetValue := reflect.ValueOf(target)
-	sourceValue := reflect.ValueOf(source)
-
-	// 确保两者都是指针类型
-	if targetValue.Kind() != reflect.Ptr || sourceValue.Kind() != reflect.Ptr {
-		return errors.New("源和目标必须都是指针")
-	}
-
-	// 获取指针指向的元素
-	targetElem := targetValue.Elem()
-	sourceElem := sourceValue.Elem()
-
-	// 复制值
-	targetElem.Set(sourceElem)
-
-	return nil
-}
-
-// Watch 开始监听所有配置源的变更
-func (cm *ConfigManager[T]) Watch() error {
-	callback := func(events []watcher.Event) error {
-		// 重新加载所有源的配置
+// watch starts monitoring changes of all configuration sources
+// It sets up a callback that reloads configurations when changes are detected
+// Returns:
+//   - An error if setting up the watcher fails
+func (cm *ConfigManager[T]) watch() error {
+	callback := func(events []watcher.Event[*T]) error {
+		// Reload configuration from all sources
 		err := cm.loadSource()
 		if err != nil {
 			return fmt.Errorf("load source from config failed. %w", err)
 		}
 
-		// 创建一个新的配置对象用于回调
-		for _, callback := range events {
-			// 对每个回调创建一个新的配置对象
-			var newCfg T
-
-			cm.loadConfig(newCfg)
-
-			err = cm.Unmarshal(newCfg)
+		// Create a new configuration object for callback
+		for _, fn := range events {
+			// Create a new configuration object for each callback
+			var newCfg *T
+			newCfg, err = cm.loadConfig()
 			if err != nil {
-				return fmt.Errorf("unmarshal config failed. %w", err)
+				return err
 			}
 
-			// 验证结构体中的字段标签
-			if err := validateFields(newCfg); err != nil {
-				log.Printf("验证新配置失败: %v", err)
-				continue
-			}
-
-			// 如果配置实现了 Validator 接口，则调用其 Validate 方法
-			if validator, ok := newCfg.(validator.Validator); ok {
-				if err := validator.Validate(); err != nil {
-					log.Printf("配置验证失败: %v", err)
-					continue
-				}
-			}
-
-			// 调用回调
-			if err := callback(newCfg); err != nil {
-				log.Printf("配置变更回调失败: %v", err)
+			// Call the callback
+			err = fn(newCfg)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -171,4 +129,16 @@ func (cm *ConfigManager[T]) Watch() error {
 	}
 
 	return cm.watcher.Watch(cm.sources, callback)
+}
+
+// Get returns the current configuration value
+// It retrieves the stored configuration from atomic.Value and returns it as type T
+func (cm *ConfigManager[T]) Get() *T {
+	cfg := cm.cfg.Value.Load()
+	ret, ok := cfg.(*T)
+	if !ok {
+		panic("please init config manager at first")
+	}
+
+	return ret
 }

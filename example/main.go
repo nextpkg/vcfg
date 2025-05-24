@@ -2,10 +2,8 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/nextpkg/vcfg"
-	"github.com/nextpkg/vcfg/source"
 	"github.com/spf13/viper"
 )
 
@@ -54,26 +52,9 @@ func (c *AppConfig) Validate() error {
 
 func main() {
 	// 创建配置管理器，添加多个配置源
-	cfg := vcfg.NewManager(
-		// 首先从配置文件加载
-		source.NewFileSource("example/config.yaml"),
-		// 然后从环境变量加载，可以覆盖文件配置
-		source.NewEnvironmentSource("APP"),
-		// 最后从 Consul 加载，可以覆盖前面的配置
-		// vcfg.NewConsulSource("myapp/config", "localhost:8500"),
-	)
+	cfg := vcfg.MustInitFile[AppConfig]("config.yaml")
 
-	// 也可以在初始化后添加配置源
-	cfg.AddSource(source.NewMemorySource(map[string]interface{}{
-		"server.host": "0.0.0.0",
-		"server.port": 9090,
-	}))
-
-	// 加载配置到结构体
-	appCfg := &AppConfig{}
-	if err := cfg.Load(appCfg); err != nil {
-		log.Fatalf("加载配置失败: %v", err)
-	}
+	appCfg := cfg.Get()
 
 	// 使用配置
 	fmt.Printf("服务器配置: %s:%d (%s)\n",
@@ -89,12 +70,6 @@ func main() {
 	fmt.Printf("日志配置: 级别=%s, 格式=%s\n",
 		appCfg.Logger.Level,
 		appCfg.Logger.Format)
-
-	// 也可以直接获取配置值
-	dbUser := cfg.Basic().GetString("database.user")
-	fmt.Printf("数据库用户: %s\n", dbUser)
-
-	stop, call, err := cfg.WatchConfig(cfg)
 }
 
 // 自定义配置源示例

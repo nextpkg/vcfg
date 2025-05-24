@@ -1,4 +1,4 @@
-package xenv
+package env
 
 import (
 	"fmt"
