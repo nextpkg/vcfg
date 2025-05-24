@@ -3,10 +3,10 @@ module github.com/nextpkg/vcfg
 go 1.24.2
 
 require (
-	github.com/fsnotify/fsnotify v1.8.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/spf13/viper v1.20.1
-	go.uber.org/atomic v1.10.0
+	go.uber.org/atomic v1.11.0
 )
 
 require (
