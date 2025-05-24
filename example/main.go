@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/nextpkg/vcfg"
-	"github.com/spf13/viper"
+	"github.com/nextpkg/vcfg/ce"
+	"github.com/nextpkg/vcfg/source"
+	"github.com/nextpkg/vcfg/viper"
 )
 
 // AppConfig 是应用程序配置结构体
@@ -53,7 +55,10 @@ func (c *AppConfig) Validate() error {
 
 func main() {
 	// 创建配置管理器，添加多个配置源
-	cfg := vcfg.MustInitFile[AppConfig]("example/config.yaml")
+	cfg := vcfg.MustInit[AppConfig](false,
+		source.NewFileSource("example/config.yaml"),
+		NewMyCustomSource(),
+	)
 
 	appCfg := cfg.Get()
 
@@ -104,7 +109,15 @@ func (m *MyCustomSource) Read() (*viper.Viper, error) {
 	return v, nil
 }
 
-// String 实现 Provider 接口
+// String 实现 Source 接口
 func (m *MyCustomSource) String() string {
 	return "MyCustomSource"
+}
+
+func (m *MyCustomSource) Watch() (<-chan struct{}, error) {
+	return nil, ce.ErrWatchNotSupported
+}
+
+func (m *MyCustomSource) Stop() error {
+	return nil
 }

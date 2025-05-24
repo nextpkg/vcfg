@@ -38,5 +38,5 @@ func MustInit[T any](enableWatching bool, sources ...source.Source) *ConfigManag
 }
 
 func MustInitFile[T any](path string) *ConfigManager[T] {
-	return MustInit[T](true, source.NewFileSource(path))
+	return MustInit[T](false, source.NewFileSource(path))
 }

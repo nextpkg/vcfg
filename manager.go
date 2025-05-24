@@ -5,16 +5,16 @@ import (
 	"sync"
 
 	"github.com/nextpkg/vcfg/ce"
-	"github.com/nextpkg/vcfg/internal/validator"
-	"github.com/nextpkg/vcfg/internal/viper"
-	"github.com/nextpkg/vcfg/internal/watcher"
 	"github.com/nextpkg/vcfg/source"
+	"github.com/nextpkg/vcfg/validator"
+	"github.com/nextpkg/vcfg/viper"
+	"github.com/nextpkg/vcfg/watcher"
 	"go.uber.org/atomic"
 )
 
-// ConfigManager is a config manager that handles configuration loading, validation, and watching
-// It supports generic configuration types through the type parameter T
-// ConfigManager provides thread-safe access to configuration values
+// ConfigManager is a configuration manager that handles loading, validation, and watching.
+// It supports generic configuration types through the type parameter T.
+// ConfigManager provides thread-safe access to configuration values.
 type ConfigManager[T any] struct {
 	sources []source.Source
 	viper   *viper.Viper
@@ -23,13 +23,13 @@ type ConfigManager[T any] struct {
 	mu      sync.RWMutex
 }
 
-// newManager creates a new config manager with the provided configuration sources
-// It initializes the internal viper and watcher components
+// newManager creates a new configuration manager with the provided sources.
+// It initializes the internal viper and watcher components.
 // Parameters:
-//   - sources: one or more configuration sources to manage
+//   - sources: one or more configuration sources to manage.
 //
 // Returns:
-//   - A new ConfigManager instance
+//   - A new ConfigManager instance.
 func newManager[T any](sources ...source.Source) *ConfigManager[T] {
 	return &ConfigManager[T]{
 		sources: sources,
@@ -38,11 +38,11 @@ func newManager[T any](sources ...source.Source) *ConfigManager[T] {
 	}
 }
 
-// load loads config from sources, validates and returns the config struct
-// This method is thread-safe through mutex locking
+// load loads configuration from sources, validates it, and returns the configuration struct.
+// This method is thread-safe through mutex locking.
 // Returns:
-//   - A pointer to the loaded and validated configuration
-//   - An error if loading or validation fails
+//   - A pointer to the loaded and validated configuration.
+//   - An error if loading or validation fails.
 func (cm *ConfigManager[T]) load() (*T, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -56,10 +56,10 @@ func (cm *ConfigManager[T]) load() (*T, error) {
 	return cm.loadConfig()
 }
 
-// loadSource loads all config sources and merges configurations into viper
-// It reads from each source and combines the configurations
+// loadSource loads all configuration sources and merges them into viper.
+// It reads from each source and combines the configurations.
 // Returns:
-//   - An error if reading from any source or merging configurations fails
+//   - An error if reading from any source or merging configurations fails.
 func (cm *ConfigManager[T]) loadSource() error {
 	for _, src := range cm.sources {
 		// Read configuration
@@ -78,10 +78,10 @@ func (cm *ConfigManager[T]) loadSource() error {
 	return nil
 }
 
-// loadConfig unmarshals the configuration from viper into a struct and validates it
+// loadConfig unmarshals the configuration from viper into a struct and validates it.
 // Returns:
-//   - A pointer to the unmarshaled and validated configuration
-//   - An error if unmarshaling or validation fails
+//   - A pointer to the unmarshaled and validated configuration.
+//   - An error if unmarshaling or validation fails.
 func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	var cfg T
 	err := cm.viper.Unmarshal(&cfg)
@@ -97,8 +97,8 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	return &cfg, nil
 }
 
-// startWatch starts monitoring changes of all configuration sources
-// It sets up a callback that reloads configurations when changes are detected
+// startWatch starts monitoring changes of all configuration sources.
+// It sets up a callback that reloads configurations when changes are detected.
 func (cm *ConfigManager[T]) startWatch() {
 	callback := func(events []watcher.Event[*T]) error {
 		// Reload configuration from all sources
@@ -129,8 +129,8 @@ func (cm *ConfigManager[T]) startWatch() {
 	cm.watcher.Watch(cm.sources, callback)
 }
 
-// Get returns the current configuration value
-// It retrieves the stored configuration from atomic.Value and returns it as type T
+// Get returns the current configuration value.
+// It retrieves the stored configuration from atomic.Value and returns it as type T.
 func (cm *ConfigManager[T]) Get() *T {
 	cfg := cm.cfg.Value.Load()
 	ret, ok := cfg.(*T)

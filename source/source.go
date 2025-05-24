@@ -1,7 +1,7 @@
 package source
 
 import (
-	"github.com/nextpkg/vcfg/internal/viper"
+	"github.com/nextpkg/vcfg/viper"
 )
 
 // Source interface defines the configuration source

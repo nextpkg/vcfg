@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/nextpkg/vcfg/internal/viper"
+	"github.com/nextpkg/vcfg/viper"
 )
 
 // FileSource represents a file-based configuration source that reads from a file.
