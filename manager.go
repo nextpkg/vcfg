@@ -19,6 +19,7 @@ type ConfigManager[T any] struct {
 	sources []source.Source
 	viper   *viper.Viper
 	watcher *watcher.Watcher[T]
+	once    sync.Once
 	cfg     atomic.Value
 	mu      sync.RWMutex
 }
@@ -97,36 +98,52 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	return &cfg, nil
 }
 
-// startWatch starts monitoring changes of all configuration sources.
+// EnableWatch starts monitoring changes of all configuration sources.
 // It sets up a callback that reloads configurations when changes are detected.
-func (cm *ConfigManager[T]) startWatch() {
-	callback := func(events []watcher.Event[*T]) error {
-		// Reload configuration from all sources
-		err := cm.loadSource()
-		if err != nil {
-			return fmt.Errorf("load source from config failed. %w", err)
-		}
+func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
+	cm.once.Do(func() {
+		cm.watcher = watcher.New[T]()
 
-		// Create a new configuration object for callback
-		for _, fn := range events {
-			// Create a new configuration object for each callback
-			var newCfg *T
-			newCfg, err = cm.loadConfig()
+		// Register callback to update when configuration changes
+		cm.watcher.OnChange(func(t *T) error {
+			cm.cfg.Store(t)
+			return nil
+		})
+
+		callback := func(events []watcher.Event[*T]) error {
+			// Reload configuration from all sources
+			err := cm.loadSource()
 			if err != nil {
-				return err
+				return fmt.Errorf("load source from config failed. %w", err)
 			}
 
-			// Call the callback
-			err = fn(newCfg)
-			if err != nil {
-				return err
+			// Create a new configuration object for callback
+			for _, fn := range events {
+				// Create a new configuration object for each callback
+				var newCfg *T
+				newCfg, err = cm.loadConfig()
+				if err != nil {
+					return err
+				}
+
+				// Call the callback
+				err = fn(newCfg)
+				if err != nil {
+					return err
+				}
 			}
+
+			return nil
 		}
+		cm.watcher.Watch(cm.sources, callback)
+	})
+	return cm
+}
 
-		return nil
-	}
-
-	cm.watcher.Watch(cm.sources, callback)
+// DisableWatch stops monitoring changes of all configuration sources.
+func (cm *ConfigManager[T]) DisableWatch() {
+	cm.watcher.Stop()
+	cm.once = sync.Once{}
 }
 
 // Get returns the current configuration value.

@@ -21,7 +21,7 @@ type AppConfig struct {
 type ServerConfig struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port" validate:"oneof=8080 9090"`
-	Protocol string `json:",options=http|https,default=http"`
+	Protocol string
 }
 
 // DBConfig 是数据库配置
@@ -35,9 +35,9 @@ type DBConfig struct {
 
 // LogConfig 是日志配置
 type LogConfig struct {
-	Level  string `json:",options=debug|info|warn|error,default=info"`
-	Format string `json:",options=json|text,default=text"`
-	Offset string `json:",options=first|last,default=last"`
+	Level  string
+	Format string
+	Offset string
 }
 
 // Validate 实现 Validator 接口
@@ -55,10 +55,10 @@ func (c *AppConfig) Validate() error {
 
 func main() {
 	// 创建配置管理器，添加多个配置源
-	cfg := vcfg.MustInit[AppConfig](false,
+	cfg := vcfg.MustInit[AppConfig](
 		source.NewFileSource("example/config.yaml"),
-		NewMyCustomSource(),
-	)
+		//NewMyCustomSource(),
+	).EnableWatch()
 
 	appCfg := cfg.Get()
 
@@ -88,7 +88,6 @@ func main() {
 	}
 }
 
-// 自定义配置源示例
 type MyCustomSource struct {
 	// 可以添加自定义字段
 }
@@ -104,7 +103,7 @@ func (m *MyCustomSource) Read() (*viper.Viper, error) {
 
 	// 从任何地方获取配置数据
 	// 例如: 远程API, 数据库, 特定文件格式...
-	v.Set("custom.key", "custom value")
+	v.Set("logger.level", "warn")
 
 	return v, nil
 }

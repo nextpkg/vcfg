@@ -13,7 +13,7 @@ import (
 //
 // Returns:
 //   - A fully initialized ConfigManager instance
-func MustInit[T any](enableWatching bool, sources ...source.Source) *ConfigManager[T] {
+func MustInit[T any](sources ...source.Source) *ConfigManager[T] {
 	cm := newManager[T](sources...)
 
 	cfg, err := cm.load()
@@ -23,20 +23,9 @@ func MustInit[T any](enableWatching bool, sources ...source.Source) *ConfigManag
 
 	cm.cfg.Store(cfg)
 
-	if enableWatching {
-		// Register callback to update when configuration changes
-		cm.watcher.OnChange(func(t *T) error {
-			cm.cfg.Store(t)
-			return nil
-		})
-
-		// Start monitoring
-		cm.startWatch()
-	}
-
 	return cm
 }
 
 func MustInitFile[T any](path string) *ConfigManager[T] {
-	return MustInit[T](false, source.NewFileSource(path))
+	return MustInit[T](source.NewFileSource(path))
 }
