@@ -85,6 +85,12 @@ func (cm *ConfigManager[T]) loadSource() error {
 //   - An error if unmarshaling or validation fails.
 func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	var cfg T
+
+	// Set default values
+	if def, ok := any(&cfg).(interface{ SetDefaults() }); ok {
+		def.SetDefaults()
+	}
+
 	err := cm.viper.Unmarshal(&cfg)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal config failed. %w", err)

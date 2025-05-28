@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/nextpkg/vcfg"
 	"github.com/nextpkg/vcfg/ce"
@@ -53,10 +52,16 @@ func (c *AppConfig) Validate() error {
 	return nil
 }
 
+func (c *AppConfig) SetDefaults() {
+	if c.Server.Protocol == "" {
+		c.Server.Protocol = "https"
+	}
+}
+
 func main() {
 	// 创建配置管理器，添加多个配置源
 	cfg := vcfg.MustInit[AppConfig](
-		source.NewFileSource("example/config.yaml"),
+		source.NewFileSource("config.yaml"),
 		//NewMyCustomSource(),
 	).EnableWatch()
 
@@ -66,26 +71,19 @@ func main() {
 	fmt.Printf("服务器配置: %s:%d (%s)\n",
 		appCfg.Server.Host,
 		appCfg.Server.Port,
-		appCfg.Server.Protocol)
+		appCfg.Server.Protocol,
+	)
 
 	fmt.Printf("数据库配置: %s:%d/%s\n",
 		appCfg.Database.Host,
 		appCfg.Database.Port,
-		appCfg.Database.DBName)
+		appCfg.Database.DBName,
+	)
 
 	fmt.Printf("日志配置: 级别=%s, 格式=%s\n",
 		appCfg.Logger.Level,
-		appCfg.Logger.Format)
-
-	for {
-		time.Sleep(1 * time.Second)
-
-		appCfg = cfg.Get()
-		fmt.Printf("服务器配置: %s:%d (%s)\n",
-			appCfg.Server.Host,
-			appCfg.Server.Port,
-			appCfg.Server.Protocol)
-	}
+		appCfg.Logger.Format,
+	)
 }
 
 type MyCustomSource struct {
