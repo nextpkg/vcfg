@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/nextpkg/vcfg/ce"
 )
 
 var vld = validator.New(validator.WithRequiredStructEnabled())
@@ -16,10 +15,14 @@ type Validator interface {
 
 // Validate validates the value if it implements the Validator interface.
 func Validate(v any) error {
+	if v == nil {
+		return fmt.Errorf("validation target cannot be nil")
+	}
+
 	// basic validate
 	err := vld.Struct(v)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ce.ErrLoadProviderFailed, err)
+		return fmt.Errorf("struct validation failed: %w", err)
 	}
 
 	if val, ok := v.(Validator); ok {

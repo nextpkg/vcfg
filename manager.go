@@ -1,6 +1,7 @@
 package vcfg
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -13,7 +14,6 @@ import (
 	"github.com/knadh/koanf/v2"
 	"go.uber.org/atomic"
 
-	"github.com/nextpkg/vcfg/ce"
 	"github.com/nextpkg/vcfg/validator"
 )
 
@@ -27,12 +27,13 @@ type (
 	// It supports generic configuration types through the type parameter T.
 	// ConfigManager provides thread-safe access to configuration values.
 	ConfigManager[T any] struct {
-		providers []ProviderConfig
-		koanf     *koanf.Koanf
-		once      sync.Once
-		cfg       atomic.Value
-		mu        sync.RWMutex
-		watchers  []func() // cleanup functions for watchers
+		providers     []ProviderConfig
+		koanf         *koanf.Koanf
+		once          sync.Once
+		cfg           atomic.Value
+		mu            sync.RWMutex
+		watchers      []func() // cleanup functions for watchers
+		pluginManager *PluginManager[T]
 	}
 
 	// Watcher interface for providers that support watching configuration changes
@@ -80,11 +81,13 @@ func newManager[T any](sources ...any) *ConfigManager[T] {
 		}
 	}
 
-	return &ConfigManager[T]{
+	cm := &ConfigManager[T]{
 		providers: providers,
 		koanf:     koanf.New("."),
 		watchers:  make([]func(), 0),
 	}
+	cm.pluginManager = NewPluginManager[T](cm)
+	return cm
 }
 
 // getParserForFile returns the appropriate parser based on file extension
@@ -125,7 +128,7 @@ func (cm *ConfigManager[T]) load() (*T, error) {
 func (cm *ConfigManager[T]) loadSource() error {
 	for _, providerConfig := range cm.providers {
 		if err := cm.koanf.Load(providerConfig.Provider, providerConfig.Parser); err != nil {
-			return fmt.Errorf("%w: %w load from provider %T", ce.ErrLoadProviderFailed, err, providerConfig.Provider)
+			return NewParseError(fmt.Sprintf("%T", providerConfig.Provider), "failed to load from provider", err)
 		}
 	}
 
@@ -137,6 +140,10 @@ func (cm *ConfigManager[T]) loadSource() error {
 //   - A pointer to the unmarshaled and validated configuration.
 //   - An error if unmarshaling or validation fails.
 func (cm *ConfigManager[T]) loadConfig() (*T, error) {
+	if cm == nil || cm.koanf == nil {
+		return nil, NewParseError("manager", "configuration manager not properly initialized", nil)
+	}
+
 	var cfg T
 
 	// Set default values if the type implements SetDefaults
@@ -145,11 +152,17 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	}
 
 	if err := cm.koanf.Unmarshal("", &cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal config failed: %w", err)
+		return nil, NewParseError("koanf", "failed to unmarshal configuration", err)
 	}
 
 	if err := validator.Validate(&cfg); err != nil {
-		return nil, fmt.Errorf("validate config failed: %w", err)
+		return nil, NewValidationError("validator", "configuration validation failed", err)
+	}
+
+	// 通知插件配置已加载
+	if cm.pluginManager != nil {
+		ctx := context.Background()
+		cm.pluginManager.NotifyConfigLoaded(ctx, &cfg)
 	}
 
 	return &cfg, nil
@@ -177,12 +190,17 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 				}
 
 				slog.Info("Configuration file changed, reloading...")
+				// 获取旧配置
+				oldCfg := cm.Get()
 				// Reload configuration
 				if newCfg, err := cm.load(); err != nil {
 					slog.Error("Failed to reload configuration", "error", err)
 				} else {
 					// Atomically update the configuration
 					cm.cfg.Store(newCfg)
+					// 通知插件配置已变更
+					ctx := context.Background()
+					cm.pluginManager.NotifyConfigChanged(ctx, oldCfg, newCfg)
 					slog.Info("Configuration reloaded successfully")
 				}
 			}
@@ -216,12 +234,55 @@ func (cm *ConfigManager[T]) DisableWatch() {
 
 // Get returns the current configuration value.
 // It retrieves the stored configuration from atomic.Value and returns it as type T.
+// Returns nil if configuration is not initialized.
 func (cm *ConfigManager[T]) Get() *T {
-	cfg := cm.cfg.Value.Load()
+	if cm == nil {
+		return nil
+	}
+	cfg := cm.cfg.Load()
+	if cfg == nil {
+		return nil
+	}
 	ret, ok := cfg.(*T)
 	if !ok {
-		panic("please init config manager at first")
+		return nil
+	}
+	return ret
+}
+
+// RegisterPlugin 注册插件
+func (cm *ConfigManager[T]) RegisterPlugin(plugin Plugin[T]) error {
+	return cm.pluginManager.Register(plugin)
+}
+
+// UnregisterPlugin 注销插件
+func (cm *ConfigManager[T]) UnregisterPlugin(name string) error {
+	return cm.pluginManager.Unregister(name)
+}
+
+// GetPlugin 获取插件
+func (cm *ConfigManager[T]) GetPlugin(name string) (Plugin[T], bool) {
+	return cm.pluginManager.Get(name)
+}
+
+// ListPlugins 列出所有插件
+func (cm *ConfigManager[T]) ListPlugins() []string {
+	return cm.pluginManager.List()
+}
+
+// Close 关闭配置管理器，包括所有插件和监听器
+func (cm *ConfigManager[T]) Close() error {
+	if cm == nil {
+		return nil
 	}
 
-	return ret
+	// 先关闭监听器
+	cm.DisableWatch()
+
+	// 再关闭插件
+	if cm.pluginManager != nil {
+		ctx := context.Background()
+		return cm.pluginManager.Shutdown(ctx)
+	}
+	return nil
 }
