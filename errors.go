@@ -96,11 +96,6 @@ func NewConfigError(errType ErrorType, source, message string, cause error) *Con
 
 // 便捷的错误创建函数
 
-// NewFileNotFoundError 创建文件未找到错误
-func NewFileNotFoundError(filePath string, cause error) *ConfigError {
-	return NewConfigError(ErrorTypeFileNotFound, filePath, "configuration file not found", cause)
-}
-
 // NewParseError 创建解析错误
 func NewParseError(source, message string, cause error) *ConfigError {
 	return NewConfigError(ErrorTypeParseFailure, source, message, cause)
@@ -109,78 +104,4 @@ func NewParseError(source, message string, cause error) *ConfigError {
 // NewValidationError 创建验证错误
 func NewValidationError(source, message string, cause error) *ConfigError {
 	return NewConfigError(ErrorTypeValidationFailure, source, message, cause)
-}
-
-// NewWatchError 创建监听错误
-func NewWatchError(source, message string, cause error) *ConfigError {
-	return NewConfigError(ErrorTypeWatchFailure, source, message, cause)
-}
-
-// NewPluginError 创建插件错误
-func NewPluginError(pluginName, message string, cause error) *ConfigError {
-	return NewConfigError(ErrorTypePluginFailure, pluginName, message, cause)
-}
-
-// NewMergeError 创建合并错误
-func NewMergeError(source, message string, cause error) *ConfigError {
-	return NewConfigError(ErrorTypeMergeFailure, source, message, cause)
-}
-
-// ValidationErrors 验证错误集合
-type ValidationErrors struct {
-	Errors []ValidationError
-}
-
-// ValidationError 单个验证错误
-type ValidationError struct {
-	Field   string
-	Value   interface{}
-	Rule    string
-	Message string
-}
-
-// Error 实现 error 接口
-func (ve ValidationErrors) Error() string {
-	if len(ve.Errors) == 0 {
-		return "no validation errors"
-	}
-
-	if len(ve.Errors) == 1 {
-		return ve.Errors[0].Error()
-	}
-
-	var messages []string
-	for _, err := range ve.Errors {
-		messages = append(messages, err.Error())
-	}
-
-	return fmt.Sprintf("multiple validation errors: %s", strings.Join(messages, "; "))
-}
-
-// Error 实现 error 接口
-func (ve ValidationError) Error() string {
-	if ve.Message != "" {
-		return fmt.Sprintf("field '%s': %s", ve.Field, ve.Message)
-	}
-
-	if ve.Rule != "" {
-		return fmt.Sprintf("field '%s' failed rule '%s' with value '%v'", ve.Field, ve.Rule, ve.Value)
-	}
-
-	return fmt.Sprintf("field '%s' validation failed with value '%v'", ve.Field, ve.Value)
-}
-
-// Add 添加验证错误
-func (ve *ValidationErrors) Add(field, rule, message string, value interface{}) {
-	ve.Errors = append(ve.Errors, ValidationError{
-		Field:   field,
-		Value:   value,
-		Rule:    rule,
-		Message: message,
-	})
-}
-
-// HasErrors 检查是否有错误
-func (ve ValidationErrors) HasErrors() bool {
-	return len(ve.Errors) > 0
 }

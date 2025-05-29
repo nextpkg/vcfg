@@ -86,7 +86,7 @@ func newManager[T any](sources ...any) *ConfigManager[T] {
 		koanf:     koanf.New("."),
 		watchers:  make([]func(), 0),
 	}
-	cm.pluginManager = NewPluginManager[T](cm)
+	cm.pluginManager = NewPluginManager(cm)
 	return cm
 }
 

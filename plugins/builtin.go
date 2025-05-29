@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -105,7 +106,7 @@ func (p *BackupPlugin[T]) cleanupOldBackups() error {
 	for i := 0; i < len(files)-p.maxBackups; i++ {
 		if err := os.Remove(files[i]); err != nil {
 			// 记录错误但继续删除其他文件
-			fmt.Printf("Warning: failed to remove old backup %s: %v\n", files[i], err)
+			slog.Warn("Failed to remove old backup", "file", files[i], "error", err)
 		}
 	}
 
@@ -136,19 +137,19 @@ func (p *MetricsPlugin[T]) Initialize(ctx context.Context, manager *vcfg.ConfigM
 func (p *MetricsPlugin[T]) OnConfigLoaded(ctx context.Context, config *T) error {
 	p.loadCount++
 	p.lastLoaded = time.Now()
-	fmt.Printf("[Metrics] Config loaded. Total loads: %d\n", p.loadCount)
+	slog.Info("Config loaded", "plugin", "metrics", "total_loads", p.loadCount)
 	return nil
 }
 
 func (p *MetricsPlugin[T]) OnConfigChanged(ctx context.Context, oldConfig, newConfig *T) error {
 	p.changeCount++
 	p.lastChanged = time.Now()
-	fmt.Printf("[Metrics] Config changed. Total changes: %d\n", p.changeCount)
+	slog.Info("Config changed", "plugin", "metrics", "total_changes", p.changeCount)
 	return nil
 }
 
 func (p *MetricsPlugin[T]) Shutdown(ctx context.Context) error {
-	fmt.Printf("[Metrics] Plugin shutdown. Final stats - Loads: %d, Changes: %d\n", p.loadCount, p.changeCount)
+	slog.Info("Plugin shutdown", "plugin", "metrics", "final_loads", p.loadCount, "final_changes", p.changeCount)
 	return nil
 }
 

@@ -3,6 +3,7 @@ package vcfg
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 )
 
@@ -109,7 +110,7 @@ func (pm *PluginManager[T]) NotifyConfigLoaded(ctx context.Context, config *T) {
 		}
 		if err := plugin.OnConfigLoaded(ctx, config); err != nil {
 			// 记录错误但不中断其他插件
-			fmt.Printf("Plugin %s OnConfigLoaded error: %v\n", name, err)
+			slog.Error("Plugin OnConfigLoaded error", "plugin", name, "error", err)
 		}
 	}
 }
@@ -129,7 +130,7 @@ func (pm *PluginManager[T]) NotifyConfigChanged(ctx context.Context, oldConfig, 
 		}
 		if err := plugin.OnConfigChanged(ctx, oldConfig, newConfig); err != nil {
 			// 记录错误但不中断其他插件
-			fmt.Printf("Plugin %s OnConfigChanged error: %v\n", name, err)
+			slog.Error("Plugin OnConfigChanged error", "plugin", name, "error", err)
 		}
 	}
 }
