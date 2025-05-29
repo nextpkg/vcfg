@@ -12,22 +12,15 @@ import (
 )
 
 type TestConfig struct {
-	Message string `koanf:"message"`
-	Value   int    `koanf:"value"`
+	Message string `koanf:"message" default:"default message"`
+	Value   int    `koanf:"value" default:"42"`
 }
 
 func (c *TestConfig) Validate() error {
 	return nil
 }
 
-func (c *TestConfig) SetDefaults() {
-	if c.Message == "" {
-		c.Message = "default message"
-	}
-	if c.Value == 0 {
-		c.Value = 42
-	}
-}
+// SetDefaults 方法不再需要，默认值通过结构体标签自动设置
 
 func main() {
 	// Create a test config file

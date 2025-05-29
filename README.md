@@ -37,25 +37,16 @@ import (
 
 type AppConfig struct {
     Server struct {
-        Host string `json:"host"`
-        Port int    `json:"port" validate:"min=1,max=65535"`
+        Host string `json:"host" default:"localhost"`
+        Port int    `json:"port" default:"8080"`
     } `json:"server"`
     Database struct {
         Host string `json:"host"`
-        Port int    `json:"port"`
         Name string `json:"name"`
     } `json:"database"`
 }
 
-// 设置默认值
-func (c *AppConfig) SetDefaults() {
-    if c.Server.Host == "" {
-        c.Server.Host = "localhost"
-    }
-    if c.Server.Port == 0 {
-        c.Server.Port = 8080
-    }
-}
+// 默认值现在通过结构体标签自动设置，无需手动实现 SetDefaults 方法
 
 // 自定义验证
 func (c *AppConfig) Validate() error {

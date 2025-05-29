@@ -5,6 +5,8 @@ import (
 
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/v2"
+	"github.com/nextpkg/vcfg/providers"
+	"github.com/urfave/cli/v3"
 )
 
 // Builder 配置管理器构建器
@@ -62,6 +64,13 @@ func (b *Builder[T]) AddEnvWithTransform(prefix, delimiter string, transform fun
 func (b *Builder[T]) AddProvider(provider koanf.Provider) *Builder[T] {
 	b.sources = append(b.sources, provider)
 	return b
+}
+
+// AddCliFlags 添加 CLI flags 配置源
+// CLI flags are typically added last to ensure they override other configuration sources.
+func (b *Builder[T]) AddCliFlags(cmd *cli.Command, delim string) *Builder[T] {
+	provider := providers.NewCliFlagsProvider(cmd, delim)
+	return b.AddProvider(provider)
 }
 
 // AddPlugin 添加插件

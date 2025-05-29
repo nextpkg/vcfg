@@ -7,22 +7,17 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/urfave/cli/v3"
 )
 
 type TestConfig struct {
-	Name    string `json:"name"`
-	Port    int    `json:"port" validate:"min=1,max=65535"`
+	Name    string `json:"name" default:"test-app"`
+	Port    int    `json:"port" validate:"min=1,max=65535" default:"8080"`
 	Enabled bool   `json:"enabled"`
 }
 
-func (c *TestConfig) SetDefaults() {
-	if c.Name == "" {
-		c.Name = "test-app"
-	}
-	if c.Port == 0 {
-		c.Port = 8080
-	}
-}
+// SetDefaults 方法不再需要，默认值通过结构体标签自动设置
 
 func (c *TestConfig) Validate() error {
 	if c.Name == "" {
@@ -348,4 +343,61 @@ func TestMultiProviderWatch(t *testing.T) {
 
 	t.Logf("配置变更后的merge结果: %+v", *newConfig)
 	t.Log("多provider watch功能测试通过")
+}
+
+func TestCliFlagsProvider(t *testing.T) {
+	// Create a temporary config file
+	configFile := "test_config.yaml"
+	configContent := `name: file-config
+port: 3000
+enabled: false`
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to create config file: %v", err)
+	}
+	defer os.Remove(configFile)
+
+	// Create a CLI command with flags
+	cmd := &cli.Command{
+		Name: "test",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "name"},
+			&cli.IntFlag{Name: "port"},
+			&cli.BoolFlag{Name: "enabled"},
+		},
+		Action: func(ctx context.Context, c *cli.Command) error {
+			// Build configuration manager with file and CLI flags
+			manager, err := NewBuilder[TestConfig]().
+				AddFile(configFile). // File config (lower priority)
+				AddCliFlags(c, "."). // CLI flags (higher priority)
+				Build()
+			if err != nil {
+				t.Errorf("Failed to build config manager: %v", err)
+				return err
+			}
+			defer manager.Close()
+
+			// Get merged configuration
+			config := manager.Get()
+
+			// Verify CLI flags override file config
+			if config.Name != "cli-override" {
+				t.Errorf("Expected name to be 'cli-override', got '%s'", config.Name)
+			}
+			if config.Port != 9090 {
+				t.Errorf("Expected port to be 9090, got %d", config.Port)
+			}
+			if !config.Enabled {
+				t.Errorf("Expected enabled to be true, got %t", config.Enabled)
+			}
+
+			t.Log("CLI flags successfully override file config")
+			return nil
+		},
+	}
+
+	// Simulate command line arguments with CLI flags
+	args := []string{"test", "--name", "cli-override", "--port", "9090", "--enabled"}
+	if err := cmd.Run(context.Background(), args); err != nil {
+		t.Fatalf("Failed to run CLI command: %v", err)
+	}
 }

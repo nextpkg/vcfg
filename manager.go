@@ -4,30 +4,22 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"sync"
 
-	"github.com/knadh/koanf/parsers/json"
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/env"
-	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 	"go.uber.org/atomic"
 
+	"github.com/nextpkg/vcfg/defaults"
+	"github.com/nextpkg/vcfg/providers"
 	"github.com/nextpkg/vcfg/validator"
 )
 
 type (
-	// ProviderConfig holds a koanf provider with its parser
-	ProviderConfig struct {
-		Provider koanf.Provider
-		Parser   koanf.Parser
-	}
 	// ConfigManager is a configuration manager that handles loading, validation, and watching.
 	// It supports generic configuration types through the type parameter T.
 	// ConfigManager provides thread-safe access to configuration values.
 	ConfigManager[T any] struct {
-		providers     []ProviderConfig
+		providers     []providers.ProviderConfig
 		koanf         *koanf.Koanf
 		once          sync.Once
 		cfg           atomic.Value
@@ -55,52 +47,19 @@ type (
 // Returns:
 //   - A new ConfigManager instance.
 func newManager[T any](sources ...any) *ConfigManager[T] {
-	var providers []ProviderConfig
-
-	for _, src := range sources {
-		switch s := src.(type) {
-		case string:
-			// File path - create file provider with appropriate parser
-			provider := file.Provider(s)
-			parser := getParserForFile(s)
-			providers = append(providers, ProviderConfig{Provider: provider, Parser: parser})
-		case koanf.Provider:
-			// Direct koanf.Provider - determine parser based on provider type
-			var parser koanf.Parser
-			switch s.(type) {
-			case *env.Env:
-				// Env provider doesn't need a parser
-				parser = nil
-			default:
-				// Use YAML parser as default for other providers
-				parser = yaml.Parser()
-			}
-			providers = append(providers, ProviderConfig{Provider: s, Parser: parser})
-		default:
-			panic(fmt.Sprintf("unsupported source type: %T, expected string (file path) or koanf.Provider", src))
-		}
+	factory := providers.NewProviderFactory()
+	providerConfigs, err := factory.CreateProviders(sources...)
+	if err != nil {
+		panic(err)
 	}
 
 	cm := &ConfigManager[T]{
-		providers: providers,
+		providers: providerConfigs,
 		koanf:     koanf.New("."),
 		watchers:  make([]func(), 0),
 	}
 	cm.pluginManager = NewPluginManager(cm)
 	return cm
-}
-
-// getParserForFile returns the appropriate parser based on file extension
-func getParserForFile(path string) koanf.Parser {
-	ext := filepath.Ext(path)
-	switch ext {
-	case ".yaml", ".yml":
-		return yaml.Parser()
-	case ".json":
-		return json.Parser()
-	default:
-		return yaml.Parser() // Default to YAML
-	}
 }
 
 // load loads configuration from sources, validates it, and returns the configuration struct.
@@ -146,10 +105,8 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 
 	var cfg T
 
-	// Set default values if the type implements SetDefaults
-	if def, ok := any(&cfg).(interface{ SetDefaults() }); ok {
-		def.SetDefaults()
-	}
+	// Set default values using struct tags
+	defaults.SetDefaults(&cfg)
 
 	if err := cm.koanf.Unmarshal("", &cfg); err != nil {
 		return nil, NewParseError("koanf", "failed to unmarshal configuration", err)

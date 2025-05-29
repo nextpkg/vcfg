@@ -18,9 +18,9 @@ type AppConfig struct {
 
 // ServerConfig 是服务器配置
 type ServerConfig struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port" validate:"oneof=8080 9090"`
-	Protocol string
+	Host     string `json:"host" default:"localhost"`
+	Port     int    `json:"port" validate:"oneof=8080 9090" default:"8080"`
+	Protocol string `default:"https"`
 }
 
 // DBConfig 是数据库配置
@@ -52,11 +52,7 @@ func (c *AppConfig) Validate() error {
 	return nil
 }
 
-func (c *AppConfig) SetDefaults() {
-	if c.Server.Protocol == "" {
-		c.Server.Protocol = "https"
-	}
-}
+// SetDefaults 方法不再需要，默认值通过结构体标签自动设置
 
 func main() {
 	// Test YAML configuration

@@ -23,8 +23,8 @@ type AppConfig struct {
 }
 
 type ServerConfig struct {
-	Host string `json:"host"`
-	Port int    `json:"port" validate:"min=1,max=65535"`
+	Host string `json:"host" default:"localhost"`
+	Port int    `json:"port" validate:"min=1,max=65535" default:"8080"`
 }
 
 type DBConfig struct {
@@ -36,25 +36,11 @@ type DBConfig struct {
 }
 
 type LogConfig struct {
-	Level  string `json:"level"`
-	Format string `json:"format"`
+	Level  string `json:"level" default:"info"`
+	Format string `json:"format" default:"json"`
 }
 
-// SetDefaults 设置默认值
-func (c *AppConfig) SetDefaults() {
-	if c.Server.Host == "" {
-		c.Server.Host = "localhost"
-	}
-	if c.Server.Port == 0 {
-		c.Server.Port = 8080
-	}
-	if c.Logger.Level == "" {
-		c.Logger.Level = "info"
-	}
-	if c.Logger.Format == "" {
-		c.Logger.Format = "json"
-	}
-}
+// SetDefaults 方法不再需要，默认值通过结构体标签自动设置
 
 // Validate 自定义验证
 func (c *AppConfig) Validate() error {
