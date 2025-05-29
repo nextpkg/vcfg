@@ -2,40 +2,101 @@ package vcfg
 
 import (
 	"fmt"
+	"log/slog"
+	"path/filepath"
 	"sync"
 
-	"github.com/nextpkg/vcfg/ce"
-	"github.com/nextpkg/vcfg/source"
-	"github.com/nextpkg/vcfg/validator"
-	"github.com/nextpkg/vcfg/viper"
-	"github.com/nextpkg/vcfg/watcher"
+	"github.com/knadh/koanf/parsers/json"
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/v2"
 	"go.uber.org/atomic"
+
+	"github.com/nextpkg/vcfg/ce"
+	"github.com/nextpkg/vcfg/validator"
 )
 
-// ConfigManager is a configuration manager that handles loading, validation, and watching.
-// It supports generic configuration types through the type parameter T.
-// ConfigManager provides thread-safe access to configuration values.
-type ConfigManager[T any] struct {
-	sources []source.Source
-	viper   *viper.Viper
-	watcher *watcher.Watcher[T]
-	once    sync.Once
-	cfg     atomic.Value
-	mu      sync.RWMutex
-}
+type (
+	// ProviderConfig holds a koanf provider with its parser
+	ProviderConfig struct {
+		Provider koanf.Provider
+		Parser   koanf.Parser
+	}
+	// ConfigManager is a configuration manager that handles loading, validation, and watching.
+	// It supports generic configuration types through the type parameter T.
+	// ConfigManager provides thread-safe access to configuration values.
+	ConfigManager[T any] struct {
+		providers []ProviderConfig
+		koanf     *koanf.Koanf
+		once      sync.Once
+		cfg       atomic.Value
+		mu        sync.RWMutex
+		watchers  []func() // cleanup functions for watchers
+	}
+
+	// Watcher interface for providers that support watching configuration changes
+	Watcher interface {
+		Watch(cb func(event any, err error)) error
+	}
+
+	// Unwatcher interface for providers that support stopping watch
+	Unwatcher interface {
+		Unwatch()
+	}
+)
 
 // newManager creates a new configuration manager with the provided sources.
-// It initializes the internal viper and watcher components.
+// It accepts file paths and koanf.Provider instances.
 // Parameters:
-//   - sources: one or more configuration sources to manage.
+//   - sources: file paths (strings) or koanf.Provider instances
 //
 // Returns:
 //   - A new ConfigManager instance.
-func newManager[T any](sources ...source.Source) *ConfigManager[T] {
+func newManager[T any](sources ...any) *ConfigManager[T] {
+	var providers []ProviderConfig
+
+	for _, src := range sources {
+		switch s := src.(type) {
+		case string:
+			// File path - create file provider with appropriate parser
+			provider := file.Provider(s)
+			parser := getParserForFile(s)
+			providers = append(providers, ProviderConfig{Provider: provider, Parser: parser})
+		case koanf.Provider:
+			// Direct koanf.Provider - determine parser based on provider type
+			var parser koanf.Parser
+			switch s.(type) {
+			case *env.Env:
+				// Env provider doesn't need a parser
+				parser = nil
+			default:
+				// Use YAML parser as default for other providers
+				parser = yaml.Parser()
+			}
+			providers = append(providers, ProviderConfig{Provider: s, Parser: parser})
+		default:
+			panic(fmt.Sprintf("unsupported source type: %T, expected string (file path) or koanf.Provider", src))
+		}
+	}
+
 	return &ConfigManager[T]{
-		sources: sources,
-		viper:   viper.New(),
-		watcher: watcher.New[T](),
+		providers: providers,
+		koanf:     koanf.New("."),
+		watchers:  make([]func(), 0),
+	}
+}
+
+// getParserForFile returns the appropriate parser based on file extension
+func getParserForFile(path string) koanf.Parser {
+	ext := filepath.Ext(path)
+	switch ext {
+	case ".yaml", ".yml":
+		return yaml.Parser()
+	case ".json":
+		return json.Parser()
+	default:
+		return yaml.Parser() // Default to YAML
 	}
 }
 
@@ -57,98 +118,99 @@ func (cm *ConfigManager[T]) load() (*T, error) {
 	return cm.loadConfig()
 }
 
-// loadSource loads all configuration sources and merges them into viper.
-// It reads from each source and combines the configurations.
+// loadSource loads all configuration providers and merges them into koanf.
+// It reads from each provider and combines the configurations.
 // Returns:
-//   - An error if reading from any source or merging configurations fails.
+//   - An error if reading from any provider or merging configurations fails.
 func (cm *ConfigManager[T]) loadSource() error {
-	for _, src := range cm.sources {
-		// Read configuration
-		cfg, err := src.Read()
-		if err != nil {
-			return fmt.Errorf("%w: %w read from source %s", ce.ErrLoadProviderFailed, err, src.String())
-		}
-
-		// Merge configuration
-		err = cm.viper.Merge(cfg)
-		if err != nil {
-			return err
+	for _, providerConfig := range cm.providers {
+		if err := cm.koanf.Load(providerConfig.Provider, providerConfig.Parser); err != nil {
+			return fmt.Errorf("%w: %w load from provider %T", ce.ErrLoadProviderFailed, err, providerConfig.Provider)
 		}
 	}
 
 	return nil
 }
 
-// loadConfig unmarshals the configuration from viper into a struct and validates it.
+// loadConfig unmarshals the configuration from koanf into a struct and validates it.
 // Returns:
 //   - A pointer to the unmarshaled and validated configuration.
 //   - An error if unmarshaling or validation fails.
 func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	var cfg T
 
-	// Set default values
+	// Set default values if the type implements SetDefaults
 	if def, ok := any(&cfg).(interface{ SetDefaults() }); ok {
 		def.SetDefaults()
 	}
 
-	err := cm.viper.Unmarshal(&cfg)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal config failed. %w", err)
+	if err := cm.koanf.Unmarshal("", &cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config failed: %w", err)
 	}
 
-	err = validator.Validate(&cfg)
-	if err != nil {
-		return nil, fmt.Errorf("validate config failed. %w", err)
+	if err := validator.Validate(&cfg); err != nil {
+		return nil, fmt.Errorf("validate config failed: %w", err)
 	}
 
 	return &cfg, nil
 }
 
-// EnableWatch starts monitoring changes of all configuration sources.
-// It sets up a callback that reloads configurations when changes are detected.
+// EnableWatch enables watching for configuration changes.
+// It sets up file watchers for all file-based providers.
+// When a configuration file changes, it automatically reloads the configuration.
+// Returns:
+//   - An error if setting up watchers fails.
 func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
-	cm.once.Do(func() {
-		cm.watcher = watcher.New[T]()
+	slog.Info("Setting up watchers for configuration providers")
+	for _, providerConfig := range cm.providers {
+		slog.Debug("Checking provider for watch support", "provider", fmt.Sprintf("%T", providerConfig.Provider))
 
-		// Register callback to update when configuration changes
-		cm.watcher.OnChange(func(t *T) error {
-			cm.cfg.Store(t)
-			return nil
-		})
+		// Use interface assertion to check if provider supports Watch
+		if watcher, ok := providerConfig.Provider.(Watcher); ok {
+			slog.Debug("Setting up watcher for provider", "provider", fmt.Sprintf("%T", providerConfig.Provider))
 
-		callback := func(events []watcher.Event[*T]) error {
-			// Reload configuration from all sources
-			err := cm.loadSource()
-			if err != nil {
-				return fmt.Errorf("load source from config failed. %w", err)
-			}
-
-			// Create a new configuration object for callback
-			for _, fn := range events {
-				// Create a new configuration object for each callback
-				var newCfg *T
-				newCfg, err = cm.loadConfig()
+			// Create callback function
+			callback := func(event any, err error) {
 				if err != nil {
-					return err
+					slog.Error("Watch error", "error", err)
+					return
 				}
 
-				// Call the callback
-				err = fn(newCfg)
-				if err != nil {
-					return err
+				slog.Info("Configuration file changed, reloading...")
+				// Reload configuration
+				if newCfg, err := cm.load(); err != nil {
+					slog.Error("Failed to reload configuration", "error", err)
+				} else {
+					// Atomically update the configuration
+					cm.cfg.Store(newCfg)
+					slog.Info("Configuration reloaded successfully")
 				}
 			}
 
-			return nil
+			// Call Watch method using interface
+			if err := watcher.Watch(callback); err != nil {
+				slog.Error("Failed to set up watcher", "error", err)
+				continue
+			}
+
+			// Check for Unwatch method and store cleanup function
+			if unwatcher, ok := providerConfig.Provider.(Unwatcher); ok {
+				cm.watchers = append(cm.watchers, func() {
+					unwatcher.Unwatch()
+				})
+			}
 		}
-		cm.watcher.Watch(cm.sources, callback)
-	})
+	}
+
 	return cm
 }
 
-// DisableWatch stops monitoring changes of all configuration sources.
+// DisableWatch stops monitoring changes of all configuration providers.
 func (cm *ConfigManager[T]) DisableWatch() {
-	cm.watcher.Stop()
+	for _, cleanup := range cm.watchers {
+		cleanup()
+	}
+	cm.watchers = cm.watchers[:0]
 	cm.once = sync.Once{}
 }
 

@@ -1,0 +1,15 @@
+{
+  "server": {
+    "host": "json-localhost",
+    "port": 9090
+  },
+  "database": {
+    "host": "json-db.example.com",
+    "port": 5432,
+    "dbname": "json_app_db"
+  },
+  "logger": {
+    "level": "info",
+    "format": "json"
+  }
+}
