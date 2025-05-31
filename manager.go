@@ -26,7 +26,7 @@ type (
 		cfg           atomic.Value
 		mu            sync.RWMutex
 		watchers      []func() // cleanup functions for watchers
-		pluginManager *plugins.PluginManager
+		pluginManager *plugins.PluginManager[T]
 	}
 
 	// Watcher interface for providers that support watching configuration changes
@@ -59,14 +59,14 @@ func newManager[T any](sources ...any) *ConfigManager[T] {
 		koanf:     koanf.New("."),
 		watchers:  make([]func(), 0),
 	}
-	cm.pluginManager = plugins.NewPluginManager()
+	cm.pluginManager = plugins.NewPluginManager[T]()
 
 	// 应用全局注册的插件
 	for _, entry := range plugins.ListGlobalPlugins() {
 		if err := cm.pluginManager.Register(entry.Plugin, entry.Config); err != nil {
-			slog.Error("Failed to register global plugin", "plugin", entry.Plugin.Name(), "error", err)
+			slog.Error("Failed to register global plugin", "plugin", plugins.GetPluginTypeName(entry.Plugin), "error", err)
 		} else {
-			slog.Info("Global plugin registered", "plugin", entry.Plugin.Name())
+			slog.Info("Global plugin registered", "plugin", plugins.GetPluginTypeName(entry.Plugin))
 		}
 	}
 
@@ -225,6 +225,34 @@ func (cm *ConfigManager[T]) RegisterPlugin(plugin plugins.Plugin, config plugins
 	return cm.pluginManager.Register(plugin, config)
 }
 
+// AutoRegisterPlugins automatically discovers and registers plugin instances based on current configuration
+// This method uses the global plugin type registry to automatically instantiate and register plugins
+// for any configuration field that matches a registered plugin type
+func (cm *ConfigManager[T]) AutoRegisterPlugins() error {
+	config := cm.Get()
+	if config == nil {
+		return fmt.Errorf("no configuration available for auto-registration")
+	}
+
+	// Use global auto-registration
+	if err := plugins.AutoRegisterPlugins(config); err != nil {
+		return fmt.Errorf("failed to auto-register plugins: %w", err)
+	}
+
+	// Copy globally registered plugins to local plugin manager
+	globalPlugins := plugins.Clone()
+	for key, entry := range globalPlugins {
+		// Check if plugin is already registered locally
+		if _, exists := cm.pluginManager.Get(key); !exists {
+			if err := cm.pluginManager.Register(entry.Plugin, entry.Config); err != nil {
+				slog.Warn("Failed to register auto-discovered plugin locally", "key", key, "error", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // UnregisterPlugin 注销插件
 func (cm *ConfigManager[T]) UnregisterPlugin(name string) error {
 	return cm.pluginManager.Unregister(name)
@@ -238,11 +266,6 @@ func (cm *ConfigManager[T]) GetPlugin(name string) (plugins.Plugin, bool) {
 // ListPlugins 列出所有插件
 func (cm *ConfigManager[T]) ListPlugins() []string {
 	return cm.pluginManager.List()
-}
-
-// GetPluginManager 获取插件管理器（用于高级操作）
-func (cm *ConfigManager[T]) GetPluginManager() *plugins.PluginManager {
-	return cm.pluginManager
 }
 
 // StartAllPlugins 启动所有插件

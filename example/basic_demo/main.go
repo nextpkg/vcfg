@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
+	"os"
 
 	"github.com/nextpkg/vcfg"
 )
@@ -25,6 +27,12 @@ type DatabaseConfig struct {
 }
 
 func main() {
+	opts := slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &opts)))
+
 	fmt.Println("🚀 VCFG Basic Usage Demo")
 	fmt.Println("========================")
 
@@ -46,10 +54,7 @@ func main() {
 	// Display configuration
 	fmt.Println("\n📋 Current Configuration:")
 	fmt.Printf("Server: %s:%d\n", config.Server.Host, config.Server.Port)
-	fmt.Printf("Database: %s:%d/%s\n",
-		config.Database.Host,
-		config.Database.Port,
-		config.Database.Name)
+	fmt.Printf("Database: %s:%d/%s\n", config.Database.Host, config.Database.Port, config.Database.Name)
 
 	// Show configuration source priority
 	fmt.Println("\n🔄 Configuration Sources (priority order):")

@@ -3,36 +3,32 @@ package main
 import (
 	"fmt"
 	"log/slog"
-
-	"github.com/nextpkg/vcfg/plugins"
 )
 
-func init() {
-	plugins.RegisterGlobalPlugin(&RedisPlugin{}, &RedisConfig{})
-}
+// func init() {
+//	plugins.RegisterGlobalPlugin(&RedisPlugin{}, &RedisConfig{})
+// }
+// Note: Global plugin registration is disabled to support multi-instance plugins.
+// Plugins are now registered manually in main.go for each configuration instance.
 
-// RedisConfig represents Redis configuration and implements plugins.Config
+// RedisConfig represents Redis plugin configuration
 type RedisConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
+	Host     string `json:"host" yaml:"host"`
+	Port     int    `json:"port" yaml:"port"`
+	Password string `json:"password" yaml:"password"`
+	DB       int    `json:"db" yaml:"db"`
 }
 
-// Name implements plugins.Config interface
-func (r RedisConfig) Name() string {
-	return "redis"
-}
+// Note: Name() method is now optional. If not implemented, the framework
+// will automatically derive the type name from the struct name ("redisconfig" -> "redis")
 
 // RedisPlugin represents a Redis plugin
 type RedisPlugin struct {
 	config RedisConfig
 }
 
-// Name implements plugins.Plugin interface
-func (p *RedisPlugin) Name() string {
-	return "redis"
-}
+// Note: Name() method is now optional. If not implemented, the framework
+// will automatically derive the type name from the struct name ("redisplugin" -> "redis")
 
 // Start implements plugins.Plugin interface
 func (p *RedisPlugin) Start(config any) error {

@@ -3,41 +3,37 @@ package main
 import (
 	"fmt"
 	"log/slog"
-
-	"github.com/nextpkg/vcfg/plugins"
 )
 
-func init() {
-	plugins.RegisterGlobalPlugin(&KafkaPlugin{}, &KafkaConfig{})
-}
+// func init() {
+//	plugins.RegisterGlobalPlugin(&KafkaPlugin{}, &KafkaConfig{})
+// }
+// Note: Global plugin registration is disabled to support multi-instance plugins.
+// Plugins are now registered manually in main.go for each configuration instance.
 
-// KafkaConfig represents Kafka configuration and implements plugins.Config
+// KafkaConfig represents Kafka plugin configuration
 type KafkaConfig struct {
-	Brokers []string `yaml:"brokers"`
-	Topic   string   `yaml:"topic"`
-	GroupID string   `yaml:"group_id"`
+	BootstrapServers string `json:"bootstrap_servers" yaml:"bootstrap_servers"`
+	Topic            string `json:"topic" yaml:"topic"`
+	GroupID          string `json:"group_id" yaml:"group_id"`
 }
 
-// Name implements plugins.Config interface
-func (k KafkaConfig) Name() string {
-	return "kafka"
-}
+// Note: Name() method is now optional. If not implemented, the framework
+// will automatically derive the type name from the struct name ("kafkaconfig" -> "kafka")
 
 // KafkaPlugin represents a Kafka plugin
 type KafkaPlugin struct {
 	config KafkaConfig
 }
 
-// Name implements plugins.Plugin interface
-func (p *KafkaPlugin) Name() string {
-	return "kafka"
-}
+// Note: Name() method is now optional. If not implemented, the framework
+// will automatically derive the type name from the struct name ("kafkaplugin" -> "kafka")
 
 // Start implements plugins.Plugin interface
 func (p *KafkaPlugin) Start(config any) error {
 	if kafkaConfig, ok := config.(*KafkaConfig); ok {
 		p.config = *kafkaConfig
-		slog.Info("Kafka plugin started", "brokers", kafkaConfig.Brokers, "topic", kafkaConfig.Topic)
+		slog.Info("Kafka plugin started", "bootstrap_servers", kafkaConfig.BootstrapServers, "topic", kafkaConfig.Topic)
 		return nil
 	}
 	return fmt.Errorf("invalid kafka config type: %T", config)
@@ -47,7 +43,7 @@ func (p *KafkaPlugin) Start(config any) error {
 func (p *KafkaPlugin) Reload(config any) error {
 	if kafkaConfig, ok := config.(*KafkaConfig); ok {
 		p.config = *kafkaConfig
-		slog.Info("Kafka plugin reloaded", "brokers", kafkaConfig.Brokers, "topic", kafkaConfig.Topic)
+		slog.Info("Kafka plugin reloaded", "bootstrap_servers", kafkaConfig.BootstrapServers, "topic", kafkaConfig.Topic)
 		return nil
 	}
 	return fmt.Errorf("invalid kafka config type: %T", config)
