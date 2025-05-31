@@ -58,21 +58,6 @@ func main() {
 }
 ```
 
-### 与 vcfg 集成
-
-```go
-type AppConfig struct {
-    Name    string `json:"name" yaml:"name" default:"default-app"`
-    Port    int    `json:"port" yaml:"port" default:"8080"`
-    Enabled bool   `json:"enabled" yaml:"enabled" default:"false"`
-}
-
-// 实现 SetDefaults 接口
-func (c *AppConfig) SetDefaults() {
-    defaults.SetDefaults(c)
-}
-```
-
 ### 嵌套结构体
 
 ```go
@@ -95,36 +80,13 @@ func main() {
 }
 ```
 
-## 与传统方式的对比
-
-### 传统方式 (不推荐)
-
-```go
-func (c *Config) SetDefaults() {
-    if c.Name == "" {
-        c.Name = "default-app"
-    }
-    if c.Port == 0 {
-        c.Port = 8080
-    }
-    if !c.Enabled {
-        c.Enabled = false
-    }
-    // 更多重复的 if 语句...
-}
-```
-
-### 新方式 (推荐)
+### 使用方式
 
 ```go
 type Config struct {
     Name    string `default:"default-app"`
     Port    int    `default:"8080"`
     Enabled bool   `default:"false"`
-}
-
-func (c *Config) SetDefaults() {
-    defaults.SetDefaults(c)
 }
 ```
 
@@ -140,7 +102,6 @@ func (c *Config) SetDefaults() {
 ## 注意事项
 
 - 只有零值字段会被设置默认值
-- 如果需要将字段显式设置为零值，应该在调用 `SetDefaults` 之后进行
 - 对于指针类型，会自动创建新实例并设置默认值
 - 切片类型使用逗号分隔的字符串表示默认值
 

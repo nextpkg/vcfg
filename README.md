@@ -76,7 +76,7 @@ func main() {
         AddFile("config.yaml").                    // 添加配置文件
         AddEnv("APP_").                           // 添加环境变量
         AddPlugin(plugins.NewBackupPlugin[AppConfig]("./backups", 5)). // 添加备份插件
-        AddPlugin(plugins.NewMetricsPlugin[AppConfig]()).              // 添加指标插件
+        // 可以添加其他插件
         WithWatch().                              // 启用热重载
         Build()
     
@@ -92,41 +92,146 @@ func main() {
 
 ## 🔌 插件系统
 
+VCFG 提供两套插件系统，满足不同复杂度的需求，并支持多种注册方式：
+
+### 🌍 全局插件注册（推荐）
+
+在创建任何 ConfigManager 之前全局注册插件，提供最佳的解耦性：
+
+```go
+// 在 init() 或 ConfigManager 创建前全局注册插件
+func init() {
+    // 全局注册简单插件
+    logPlugin := &LogPlugin{}
+    vcfg.RegisterGlobalSimplePlugin(logPlugin, func(config interface{}) interface{} {
+        return config.(*AppConfig).Logger
+    })
+}
+
+func main() {
+    // 创建 ConfigManager - 全局插件会自动注册
+    cm := vcfg.NewBuilder[AppConfig]().
+        AddFile("config.yaml").
+        Build()
+    
+    // 启动所有插件（包括全局插件）
+    cm.StartAllSimplePlugins(context.Background())
+}
+```
+
+### 🚀 简单插件系统（推荐）
+
+**适用场景**：大部分插件开发场景，提供极简的开发体验。
+
+**特点**：
+- 只需实现 4 个方法：`Name()`, `Start()`, `Reload()`, `Stop()`
+- 自动配置变更检测和热重载
+- 函数式配置提取器，简单易用
+- 零样板代码，一行注册
+
+```go
+// 1. 实现简单插件接口
+type MyPlugin struct{}
+
+func (p *MyPlugin) Name() string { return "my-plugin" }
+func (p *MyPlugin) Start(ctx context.Context, config interface{}) error {
+    myConfig := config.(*MyConfig)
+    // 启动逻辑
+    return nil
+}
+func (p *MyPlugin) Reload(ctx context.Context, oldConfig, newConfig interface{}) error {
+    // 重载逻辑
+    return nil
+}
+func (p *MyPlugin) Stop(ctx context.Context) error {
+    // 停止逻辑
+    return nil
+}
+
+// 2. 构建器注册方式
+cm := vcfg.NewBuilder[AppConfig]().
+    AddFile("config.yaml").
+    AddSimplePlugin(&MyPlugin{}, func(config interface{}) interface{} {
+        return &config.(*AppConfig).Plugins.MyPlugin
+    }).
+    Build()
+
+// 3. 直接注册方式
+cm := vcfg.New[AppConfig]("config.yaml")
+cm.RegisterSimplePlugin(&MyPlugin{}, func(config interface{}) interface{} {
+    return &config.(*AppConfig).Plugins.MyPlugin
+})
+
+// 启动所有插件
+cm.StartAllSimplePlugins(context.Background())
+```
+
+### 🔧 高级插件系统
+
+**适用场景**：需要访问配置管理器完整功能的复杂插件。
+
+**特点**：
+- 完整的插件生命周期管理
+- 可访问 `ConfigManager` 实例
+- 支持复杂的配置提取逻辑
+- 适合需要高级功能的企业级插件
+
+```go
+// 实现高级插件接口（5个方法）
+type AdvancedPlugin struct{}
+
+func (p *AdvancedPlugin) Name() string { return "advanced-plugin" }
+func (p *AdvancedPlugin) Initialize(ctx context.Context, manager *vcfg.ConfigManager[AppConfig]) error { /* ... */ }
+func (p *AdvancedPlugin) OnConfigLoaded(ctx context.Context, config *AppConfig) error { /* ... */ }
+func (p *AdvancedPlugin) OnConfigChanged(ctx context.Context, oldConfig, newConfig *AppConfig) error { /* ... */ }
+func (p *AdvancedPlugin) Shutdown(ctx context.Context) error { /* ... */ }
+
+// 注册高级插件
+cm := vcfg.NewBuilder[AppConfig]().
+    AddFile("config.yaml").
+    AddPlugin(&AdvancedPlugin{}).
+    Build()
+```
+
 ### 内置插件
 
 #### 备份插件
 自动备份配置变更历史：
 
 ```go
-backupPlugin := plugins.NewBackupPlugin[AppConfig]("./backups", 10)
-cm.RegisterPlugin(backupPlugin)
+// 使用简单插件系统（推荐）
+backupPlugin := plugins.NewSimpleBackupPlugin("./backups", 5)
+cm := vcfg.NewBuilder[AppConfig]().
+    AddFile("config.yaml").
+    AddSimplePlugin(backupPlugin, func(config interface{}) interface{} {
+        // 返回插件需要的配置部分
+        return config.(*AppConfig).Backup
+    }).
+    Build()
+
+// 或使用高级插件系统
+backupPlugin := plugins.NewBackupPlugin[AppConfig]("./backups", 5)
+cm := vcfg.NewBuilder[AppConfig]().
+    AddFile("config.yaml").
+    AddPlugin(backupPlugin).
+    Build()
 ```
 
-#### 指标插件
-收集配置加载和变更统计：
+#### 日志插件
+记录配置变更日志：
 
 ```go
-metricsPlugin := plugins.NewMetricsPlugin[AppConfig]()
-cm.RegisterPlugin(metricsPlugin)
-
-// 获取统计信息
-stats := metricsPlugin.GetStats()
-fmt.Printf("配置加载次数: %d\n", stats["load_count"])
+// 使用简单插件系统（推荐）
+logPlugin := plugins.NewSimpleLogPlugin("./logs/config.log")
+cm := vcfg.NewBuilder[AppConfig]().
+    AddFile("config.yaml").
+    AddSimplePlugin(logPlugin, func(config interface{}) interface{} {
+        return config // 传递完整配置
+    }).
+    Build()
 ```
 
-#### 验证插件
-添加自定义验证规则：
 
-```go
-validationPlugin := plugins.NewValidationPlugin[AppConfig]()
-validationPlugin.AddValidator(func(config *AppConfig) error {
-    if config.Server.Port < 1024 {
-        return fmt.Errorf("server port should be >= 1024")
-    }
-    return nil
-})
-cm.RegisterPlugin(validationPlugin)
-```
 
 ### 自定义插件
 

@@ -2,17 +2,21 @@ package vcfg
 
 import (
 	"fmt"
+	"log/slog"
 
+	"github.com/knadh/koanf/providers/cliflagv3"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/v2"
-	"github.com/nextpkg/vcfg/providers"
 	"github.com/urfave/cli/v3"
+
+	"github.com/nextpkg/vcfg/plugins"
+	"github.com/nextpkg/vcfg/providers"
 )
 
 // Builder 配置管理器构建器
 type Builder[T any] struct {
 	sources     []any
-	plugins     []Plugin[T]
+	plugins     []plugins.PluginEntry
 	enableWatch bool
 }
 
@@ -20,7 +24,7 @@ type Builder[T any] struct {
 func NewBuilder[T any]() *Builder[T] {
 	return &Builder[T]{
 		sources: make([]any, 0),
-		plugins: make([]Plugin[T], 0),
+		plugins: make([]plugins.PluginEntry, 0),
 	}
 }
 
@@ -30,32 +34,11 @@ func (b *Builder[T]) AddFile(path string) *Builder[T] {
 	return b
 }
 
-// AddFiles 添加多个文件配置源
-func (b *Builder[T]) AddFiles(paths ...string) *Builder[T] {
-	for _, path := range paths {
-		b.sources = append(b.sources, path)
-	}
-	return b
-}
-
 // AddEnv 添加环境变量配置源
 func (b *Builder[T]) AddEnv(prefix string) *Builder[T] {
 	envProvider := env.ProviderWithValue(prefix, ".", func(s string, v string) (string, any) {
 		return s, v
 	})
-	b.sources = append(b.sources, envProvider)
-	return b
-}
-
-// AddEnvWithTransform 添加带转换的环境变量配置源
-func (b *Builder[T]) AddEnvWithTransform(prefix, delimiter string, transform func(string, string) (string, any)) *Builder[T] {
-	if transform == nil {
-		// 提供默认转换函数
-		transform = func(s string, v string) (string, any) {
-			return s, v
-		}
-	}
-	envProvider := env.ProviderWithValue(prefix, delimiter, transform)
 	b.sources = append(b.sources, envProvider)
 	return b
 }
@@ -69,13 +52,12 @@ func (b *Builder[T]) AddProvider(provider koanf.Provider) *Builder[T] {
 // AddCliFlags 添加 CLI flags 配置源
 // CLI flags are typically added last to ensure they override other configuration sources.
 func (b *Builder[T]) AddCliFlags(cmd *cli.Command, delim string) *Builder[T] {
-	provider := providers.NewCliFlagsProvider(cmd, delim)
-	return b.AddProvider(provider)
-}
+	// 创建一个包装的 Provider 来处理键名映射
+	cliProvider := providers.NewCliProviderWrapper(cliflagv3.Provider(cmd, delim), cmd.Name, delim)
 
-// AddPlugin 添加插件
-func (b *Builder[T]) AddPlugin(plugin Plugin[T]) *Builder[T] {
-	b.plugins = append(b.plugins, plugin)
+	slog.Debug("AddCliFlags: created wrapper", "cmd", cmd.Name, "delim", delim)
+
+	b.sources = append(b.sources, cliProvider)
 	return b
 }
 
@@ -87,10 +69,6 @@ func (b *Builder[T]) WithWatch() *Builder[T] {
 
 // Build 构建配置管理器
 func (b *Builder[T]) Build() (*ConfigManager[T], error) {
-	if b == nil {
-		return nil, fmt.Errorf("builder cannot be nil")
-	}
-
 	if len(b.sources) == 0 {
 		return nil, fmt.Errorf("at least one configuration source is required")
 	}
@@ -105,15 +83,7 @@ func (b *Builder[T]) Build() (*ConfigManager[T], error) {
 	}
 	cm.cfg.Store(cfg)
 
-	// 注册插件
-	for _, plugin := range b.plugins {
-		if plugin == nil {
-			continue
-		}
-		if err := cm.RegisterPlugin(plugin); err != nil {
-			return nil, fmt.Errorf("failed to register plugin %s: %w", plugin.Name(), err)
-		}
-	}
+	// 全局插件已在newManager中自动注册
 
 	// 启用监听
 	if b.enableWatch {

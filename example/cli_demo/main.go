@@ -17,8 +17,6 @@ type Config struct {
 	Enabled bool   `json:"enabled" yaml:"enabled" default:"false"`
 }
 
-// SetDefaults 方法不再需要，默认值通过结构体标签自动设置
-
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	if c.Name == "" {
@@ -67,8 +65,8 @@ func main() {
 			// Build configuration manager with file and CLI flags
 			// Note: CLI flags will override file config values
 			manager, err := vcfg.NewBuilder[Config]().
-				AddFile(configFile).   // File config (lower priority)
-				AddCliFlags(cmd, "."). // CLI flags (higher priority)
+				AddFile(configFile).  // File config (lower priority)
+				AddCliFlags(cmd, ""). // CLI flags (higher priority) - empty delimiter to avoid command name prefix
 				Build()
 			if err != nil {
 				return fmt.Errorf("failed to build config: %w", err)
