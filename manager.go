@@ -123,7 +123,7 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	}
 
 	// 添加调试信息
-	slog.Info("Koanf all keys", "keys", cm.koanf.All())
+	slog.Debug("Koanf all keys", "keys", cm.koanf.All())
 
 	err = cm.koanf.Unmarshal("", &cfg)
 	if err != nil {
@@ -155,7 +155,7 @@ func (cm *ConfigManager[T]) EnableWatch() {
 						return
 					}
 
-					slog.Info("Configuration change detected", "event", event)
+					slog.Debug("Configuration change detected", "event", event)
 
 					// Get old configuration before reload
 					oldConfig := cm.Get()
@@ -175,7 +175,7 @@ func (cm *ConfigManager[T]) EnableWatch() {
 						cm.pluginManager.HandleSmartConfigChange(context.Background(), oldConfig, newConfig)
 					}
 
-					slog.Info("Configuration reloaded successfully")
+					slog.Debug("Configuration reloaded successfully")
 				})
 
 				if err != nil {

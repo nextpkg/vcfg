@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -36,117 +35,12 @@ type DatabaseConfig struct {
 	Database string `yaml:"database"`
 }
 
-// KafkaConfig represents Kafka configuration and implements plugins.Config
-type KafkaConfig struct {
-	Brokers []string `yaml:"brokers"`
-	Topic   string   `yaml:"topic"`
-	GroupID string   `yaml:"group_id"`
-}
-
-// Name implements plugins.Config interface
-func (k KafkaConfig) Name() string {
-	return "kafka"
-}
-
-// RedisConfig represents Redis configuration and implements plugins.Config
-type RedisConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
-}
-
-// Name implements plugins.Config interface
-func (r RedisConfig) Name() string {
-	return "redis"
-}
-
-// KafkaPlugin represents a Kafka plugin
-type KafkaPlugin struct {
-	config KafkaConfig
-}
-
-// Name implements plugins.Plugin interface
-func (p *KafkaPlugin) Name() string {
-	return "kafka"
-}
-
-// Start implements plugins.Plugin interface
-func (p *KafkaPlugin) Start(config any) error {
-	if kafkaConfig, ok := config.(KafkaConfig); ok {
-		p.config = kafkaConfig
-		slog.Info("Kafka plugin started", "brokers", kafkaConfig.Brokers, "topic", kafkaConfig.Topic)
-		return nil
-	}
-	return fmt.Errorf("invalid kafka config type: %T", config)
-}
-
-// Reload implements plugins.Plugin interface
-func (p *KafkaPlugin) Reload(config any) error {
-	if kafkaConfig, ok := config.(*KafkaConfig); ok {
-		p.config = *kafkaConfig
-		slog.Info("Kafka plugin reloaded", "brokers", kafkaConfig.Brokers, "topic", kafkaConfig.Topic)
-		return nil
-	}
-	return fmt.Errorf("invalid kafka config type: %T", config)
-}
-
-// Stop implements plugins.Plugin interface
-func (p *KafkaPlugin) Stop() error {
-	slog.Info("Kafka plugin stopped")
-	return nil
-}
-
-// RedisPlugin represents a Redis plugin
-type RedisPlugin struct {
-	config RedisConfig
-}
-
-// Name implements plugins.Plugin interface
-func (p *RedisPlugin) Name() string {
-	return "redis"
-}
-
-// Start implements plugins.Plugin interface
-func (p *RedisPlugin) Start(config any) error {
-	if redisConfig, ok := config.(RedisConfig); ok {
-		p.config = redisConfig
-		slog.Info("Redis plugin started", "host", redisConfig.Host, "port", redisConfig.Port)
-		return nil
-	}
-	return fmt.Errorf("invalid redis config type: %T", config)
-}
-
-// Reload implements plugins.Plugin interface
-func (p *RedisPlugin) Reload(config any) error {
-	if redisConfig, ok := config.(*RedisConfig); ok {
-		p.config = *redisConfig
-		slog.Info("Redis plugin reloaded", "host", redisConfig.Host, "port", redisConfig.Port)
-		return nil
-	}
-	return fmt.Errorf("invalid redis config type: %T", config)
-}
-
-// Stop implements plugins.Plugin interface
-func (p *RedisPlugin) Stop() error {
-	slog.Info("Redis plugin stopped")
-	return nil
-}
-
 func main() {
 	// Set up structured logging
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: slog.LevelDebug,
 	}))
 	slog.SetDefault(logger)
-
-	// Register global plugins
-	kafkaPlugin := &KafkaPlugin{}
-	redisPlugin := &RedisPlugin{}
-
-	// Register plugins globally (they implement both Plugin and Config interfaces)
-	plugins.RegisterGlobalPlugin(kafkaPlugin, KafkaConfig{})
-	plugins.RegisterGlobalPlugin(redisPlugin, RedisConfig{})
 
 	slog.Info("Registered global plugins", "plugins", plugins.ListGlobalPlugins())
 

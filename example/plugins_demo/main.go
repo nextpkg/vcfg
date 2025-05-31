@@ -24,7 +24,6 @@ type ServerConfig struct {
 func main() {
 	fmt.Println("🚀 VCFG Global Plugin Demo (Generic Version)")
 	fmt.Println("============================================")
-	fmt.Println("✨ No cacheExtractor needed - plugin works directly with AppConfig!")
 	fmt.Println()
 
 	// Create configuration manager first
@@ -56,7 +55,6 @@ func main() {
 	// Demonstrate that the plugin has access to the full configuration
 	fmt.Println("🎯 Key Benefits:")
 	fmt.Println("   • Plugin can access ANY part of the configuration")
-	fmt.Println("   • No need for specific extractors like cacheExtractor")
 	fmt.Println("   • Simpler, more flexible plugin design")
 	fmt.Println("   • Type-safe with generics")
 

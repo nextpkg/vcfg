@@ -1,6 +1,6 @@
-# Smart Configuration Change Detection Demo
+# VCFG 智能配置变更检测
 
-这个示例演示了 vcfg 的智能配置变更检测功能（方案三：集成到现有插件管理器）。
+这个示例展示了 `vcfg` 的智能配置变更检测功能，能够自动识别配置变更并精确重载相关插件。
 
 ## 功能特性
 
@@ -132,16 +132,6 @@ time=2024-01-15T10:01:00.001Z level=INFO msg="Smart config change detected" fiel
 time=2024-01-15T10:01:00.002Z level=INFO msg="Smart global plugin reloaded" plugin=kafka
 time=2024-01-15T10:01:00.003Z level=INFO msg="Configuration reloaded successfully"
 ```
-
-## 优势对比
-
-| 特性 | 方案一（轮询） | 方案三（智能检测） |
-|------|----------------|--------------------|
-| 性能开销 | 高（500ms轮询） | 低（事件驱动） |
-| 精确性 | 高 | 高 |
-| 易用性 | 需要手动编写监听器 | 零配置，自动工作 |
-| 扩展性 | 需要为每个配置编写代码 | 自动支持新配置 |
-| 资源消耗 | 持续消耗CPU | 仅在变更时消耗 |
 
 ## 实现细节
 

@@ -54,7 +54,6 @@ func (pm *PluginManager) StartAll(ctx context.Context) error {
 		}
 
 		if err := entry.Plugin.Start(entry.Config); err != nil {
-			slog.Error("Failed to start plugin", "name", name, "error", err)
 			return fmt.Errorf("failed to start plugin %s: %w", name, err)
 		}
 

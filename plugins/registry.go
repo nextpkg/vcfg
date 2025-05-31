@@ -12,7 +12,6 @@ type (
 	globalPluginRegistry struct {
 		mu      sync.RWMutex
 		plugins map[string]*PluginEntry
-		configs map[string]*PluginEntry
 	}
 
 	// PluginEntry 插件注册表条目
@@ -33,7 +32,6 @@ func getGlobalPluginRegistry() *globalPluginRegistry {
 	globalRegistryOnce.Do(func() {
 		globalRegistry = &globalPluginRegistry{
 			plugins: make(map[string]*PluginEntry),
-			configs: make(map[string]*PluginEntry),
 		}
 	})
 	return globalRegistry
@@ -59,7 +57,6 @@ func RegisterGlobalPlugin(plugin Plugin, config Config) {
 	}
 
 	registry.plugins[plugin.Name()] = entry
-	registry.configs[config.Name()] = entry
 
 	slog.Info("Plugin registered", "name", plugin.Name())
 }
@@ -75,7 +72,6 @@ func UnregisterGlobalPlugin(name string) {
 	}
 
 	delete(registry.plugins, name)
-	delete(registry.configs, name)
 }
 
 // ListGlobalPlugins 列出所有全局插件
@@ -109,5 +105,4 @@ func ClearGlobalRegistry() {
 	defer registry.mu.Unlock()
 
 	registry.plugins = make(map[string]*PluginEntry)
-	registry.configs = make(map[string]*PluginEntry)
 }
