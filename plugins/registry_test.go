@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -117,7 +116,7 @@ func TestRegisterPluginInstance(t *testing.T) {
 
 // BenchmarkRegisterPluginType benchmarks plugin type registration
 func BenchmarkRegisterPluginType(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Clear registry
 		registry := getGlobalPluginRegistry()
 		registry.mu.Lock()
@@ -133,11 +132,20 @@ func BenchmarkRegisterPluginType(b *testing.B) {
 type BadConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Value   string `yaml:"value"`
+	name    string // Add name field to satisfy ConfigWithBase interface
 }
 
 // Name returns the config type name
 func (c *BadConfig) Name() string {
+	if c.name != "" {
+		return c.name
+	}
 	return "bad-config"
+}
+
+// SetName sets the config name (required by ConfigWithBase interface)
+func (c *BadConfig) SetName(name string) {
+	c.name = name
 }
 
 // BadPlugin implements Plugin interface for testing panic
@@ -171,32 +179,49 @@ func (p *BadPlugin) Stop() error {
 	return nil
 }
 
-// TestPanicOnMissingBaseConfig tests that panic occurs when BaseConfig is not embedded
-func TestPanicOnMissingBaseConfig(t *testing.T) {
+// TestCustomConfigImplementation tests that custom Config implementations work without embedding BaseConfig
+func TestCustomConfigImplementation(t *testing.T) {
 	// Clear registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
 	registry.pluginTypes = make(map[string]*PluginTypeEntry)
 	registry.mu.Unlock()
 
-	// This should panic because BadConfig doesn't embed BaseConfig
-	defer func() {
-		if r := recover(); r != nil {
-			// Expected panic, check the message
-			if panicMsg, ok := r.(string); ok {
-				if !strings.Contains(panicMsg, "must embed plugins.BaseConfig") {
-					t.Errorf("Expected panic message to contain 'must embed plugins.BaseConfig', got: %s", panicMsg)
-				}
-			} else {
-				t.Errorf("Expected string panic message, got: %v", r)
-			}
-		} else {
-			t.Error("Expected panic when BaseConfig is not embedded, but no panic occurred")
-		}
-	}()
-
-	// This should trigger the panic
+	// This should work fine with custom Config implementation
 	RegisterPluginType[*BadPlugin, *BadConfig]()
+
+	// Verify the plugin type was registered
+	registry.mu.RLock()
+	entry, exists := registry.pluginTypes["bad-config"]
+	registry.mu.RUnlock()
+
+	if !exists {
+		t.Error("Expected plugin type to be registered")
+		return
+	}
+
+	// Test that we can create a config instance
+	config := entry.ConfigFactory()
+	if config == nil {
+		t.Error("Expected config factory to return a valid config")
+		return
+	}
+
+	// Test that the config implements the Config interface properly
+	if badConfig, ok := config.(*BadConfig); ok {
+		// Test Name() method
+		if badConfig.Name() != "bad-config" {
+			t.Errorf("Expected config name to be 'bad-config', got: %s", badConfig.Name())
+		}
+
+		// Test SetName() method
+		badConfig.SetName("custom-name")
+		if badConfig.Name() != "custom-name" {
+			t.Errorf("Expected config name to be 'custom-name' after SetName, got: %s", badConfig.Name())
+		}
+	} else {
+		t.Errorf("Expected config to be *BadConfig, got: %T", config)
+	}
 }
 
 // BenchmarkRegisterInstance benchmarks plugin instance registration

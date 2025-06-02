@@ -26,13 +26,11 @@ type (
 
 	// Config defines the generic plugin configuration interface
 	// Note: Instance names are derived from config field paths, not from this method
-	Config any
-
-	// Namer is an optional interface that plugins and configs can implement
-	// to provide custom type names instead of using reflection-based naming
-	Namer interface {
-		// Name returns the unique name of the plugin type
+	Config interface {
+		// Name returns the config name
 		Name() string
+		// SetName sets the config name
+		SetName(string)
 	}
 
 	// BaseConfig provides a default implementation for plugin configuration
@@ -41,12 +39,6 @@ type (
 		name string
 	}
 )
-
-// NewBaseConfig creates a new BaseConfig with the given name
-// This function automatically sets the config name based on the type
-func NewBaseConfig(name string) BaseConfig {
-	return BaseConfig{name: name}
-}
 
 // Name returns the config name
 func (bc *BaseConfig) Name() string {
@@ -58,65 +50,15 @@ func (bc *BaseConfig) SetName(name string) {
 	bc.name = name
 }
 
-// GetConfigTypeName extracts the config type name, preferring custom Name() method over reflection
+// GetConfigTypeName extracts the config type name, preferring Config.Name() method over reflection
 func GetConfigTypeName(config Config) string {
-	// Check if config implements Namer interface for custom naming
-	if namer, ok := config.(Namer); ok {
-		if name := namer.Name(); name != "" {
-			return name
-		}
-	}
-
-	// Check if config is directly a BaseConfig with a name set
-	if baseConfig, ok := config.(*BaseConfig); ok && baseConfig.name != "" {
-		return baseConfig.name
-	}
-
-	// Use reflection to check for embedded BaseConfig
-	if name := getNameFromEmbeddedBase(config); name != "" {
+	// First try to use the Config interface Name() method
+	if name := config.Name(); name != "" {
 		return name
 	}
 
 	// Fall back to reflection-based naming
 	return getTypeNameByReflection(config)
-}
-
-// getNameFromEmbeddedBase tries to extract name from embedded BaseConfig using reflection
-func getNameFromEmbeddedBase(config Config) string {
-	v := reflect.ValueOf(config)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	if v.Kind() != reflect.Struct {
-		return ""
-	}
-
-	// Look for embedded BaseConfig field
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldType := v.Type().Field(i)
-
-		// Check if this field is an embedded BaseConfig
-		if fieldType.Anonymous && fieldType.Type == reflect.TypeOf(BaseConfig{}) {
-			if baseConfig, ok := field.Interface().(BaseConfig); ok {
-				// Return the name if it's set, otherwise return empty to continue with fallback
-				return baseConfig.name
-			}
-		}
-
-		// Check if this field is a pointer to BaseConfig
-		if fieldType.Anonymous && fieldType.Type == reflect.TypeOf(&BaseConfig{}) {
-			if !field.IsNil() {
-				if baseConfig, ok := field.Interface().(*BaseConfig); ok {
-					// Return the name if it's set, otherwise return empty to continue with fallback
-					return baseConfig.name
-				}
-			}
-		}
-	}
-
-	return ""
 }
 
 // getTypeNameByReflection derives type name from struct name using reflection

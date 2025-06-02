@@ -350,8 +350,8 @@ func TestConfigIsolation() {
 	fmt.Println()
 
 	// Register plugins with unique names to track reloads
-	plugins.RegisterPluginType[*KafkaPlugin, KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
-	plugins.RegisterPluginType[*RedisPlugin, RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*KafkaPlugin, *KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*RedisPlugin, *RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
 
 	// Auto-register plugins based on configuration
 	if err := cm.AutoRegisterPlugins(); err != nil {

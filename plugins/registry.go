@@ -47,6 +47,19 @@ type (
 		ConfigPath   string // 配置路径
 		started      bool   // 插件启动状态
 	}
+
+	// PluginPtr defines a constraint for plugin pointer types
+	PluginPtr[T any] interface {
+		Plugin
+		*T
+	}
+
+	// ConfigPtr defines a constraint for config pointer types
+	// Now requires ConfigWithBase to ensure compile-time type safety for BaseConfig embedding
+	ConfigPtr[T any] interface {
+		Config
+		*T
+	}
 )
 
 var (
@@ -76,28 +89,23 @@ func getGlobalPluginRegistry() *globalPluginRegistry {
 
 // RegisterPluginType registers a plugin type with factory functions for auto-discovery
 // This is the recommended way to register plugin types for automatic instantiation
-// Generic version with compile-time type safety
-func RegisterPluginType[P Plugin, C Config](opts ...RegisterOptions) {
+// Generic version with compile-time type safety - requires pointer types
+func RegisterPluginType[P PluginPtr[PT], C ConfigPtr[CT], PT any, CT any](opts ...RegisterOptions) {
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
 
-	// Create type-safe factory functions using generics
+	// Create simplified type-safe factory functions using generics
+	// Since P and C are constrained to be pointer types, we can simplify the logic
 	pluginFactory := func() Plugin {
 		var p P
-		pluginType := reflect.TypeOf(p)
-		if pluginType.Kind() == reflect.Ptr {
-			return reflect.New(pluginType.Elem()).Interface().(Plugin)
-		}
+		pluginType := reflect.TypeOf(p).Elem() // Get the underlying type
 		return reflect.New(pluginType).Interface().(Plugin)
 	}
 
 	configFactory := func() Config {
 		var c C
-		configType := reflect.TypeOf(c)
-		if configType.Kind() == reflect.Ptr {
-			return reflect.New(configType.Elem()).Interface().(Config)
-		}
+		configType := reflect.TypeOf(c).Elem() // Get the underlying type
 		return reflect.New(configType).Interface().(Config)
 	}
 
@@ -198,14 +206,7 @@ func AutoRegisterPlugins(config any) error {
 	}
 
 	// Start recursive discovery - pass pointer to config so fields can be addressed
-	configValue := reflect.ValueOf(config)
-	if configValue.Kind() != reflect.Ptr {
-		// If config is not a pointer, we need to get its address
-		// But since we can't get address of interface{}, we need to handle this differently
-		slog.Debug("Config is not a pointer, trying to work with value", "type", configValue.Type().String())
-		return discoverAndRegisterPlugins(configValue, pluginTypes, "")
-	}
-	return discoverAndRegisterPlugins(configValue, pluginTypes, "")
+	return discoverAndRegisterPlugins(reflect.ValueOf(config), pluginTypes, "")
 }
 
 // discoverAndRegisterPlugins recursively discovers plugin configurations in the config structure
@@ -221,7 +222,7 @@ func discoverAndRegisterPlugins(configValue reflect.Value, pluginTypes map[strin
 
 	configType := configValue.Type()
 
-	for i := 0; i < configValue.NumField(); i++ {
+	for i := range configValue.NumField() {
 		fieldType := configType.Field(i)
 		fieldValue := configValue.Field(i)
 
@@ -235,9 +236,6 @@ func discoverAndRegisterPlugins(configValue reflect.Value, pluginTypes map[strin
 		if currentPath != "" {
 			fieldPath = currentPath + "." + fieldType.Name
 		}
-
-		// Field path for logging purposes
-		_ = fieldPath
 
 		// Check if this field implements Config interface
 		if fieldValue.Kind() == reflect.Struct && fieldValue.CanAddr() {
@@ -419,18 +417,24 @@ func ClearGlobalRegistry() {
 	clear(registry.pluginTypes)
 }
 
-// setBaseConfigName automatically sets name for embedded BaseConfig
-// This reduces boilerplate for users who embed these base types
-// Panics if BaseConfig is not properly embedded to enforce best practices
+// setBaseConfigName automatically sets name for config types
+// This function works with both embedded BaseConfig and custom implementations
+// Uses the Config interface methods for maximum flexibility
 func setBaseConfigName(config Config, typeName string) {
-	// Set BaseConfig name if embedded
-	baseConfig := getEmbeddedBaseConfig(config)
-	if baseConfig == nil {
-		panic(fmt.Sprintf("Config type %T must embed plugins.BaseConfig. Please add 'plugins.BaseConfig' as an embedded field in your config struct.", config))
+	// Check if config already has a name set
+	if config.Name() != "" {
+		return // User has already set a name, respect their choice
 	}
 
-	if baseConfig.name == "" {
-		baseConfig.SetName(typeName)
+	// Try to set the name using the Config interface
+	config.SetName(typeName)
+
+	// Verify that the name was set successfully
+	if config.Name() == "" {
+		// Log a warning if SetName didn't work as expected
+		slog.Warn("Failed to set config name - SetName method may not be properly implemented",
+			"type", typeName,
+			"config_type", fmt.Sprintf("%T", config))
 	}
 }
 
