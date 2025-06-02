@@ -105,11 +105,8 @@ func RegisterPluginType[P Plugin, C Config](opts ...RegisterOptions) {
 	plugin := pluginFactory()
 	config := configFactory()
 
-	// Derive plugin type name from reflection if not set
-	pluginTypeName := getPluginTypeName(plugin, config)
-
-	// Auto-set names for BasePlugin and BaseConfig if they are embedded
-	setBaseNames(plugin, config, pluginTypeName)
+	// Auto-set names for BaseConfig if embedded
+	setBaseConfigName(config, plugin.Name())
 
 	// Determine auto-discovery setting
 	autoDiscover := true
@@ -120,12 +117,12 @@ func RegisterPluginType[P Plugin, C Config](opts ...RegisterOptions) {
 	entry := &PluginTypeEntry{
 		PluginFactory: pluginFactory,
 		ConfigFactory: configFactory,
-		PluginType:    pluginTypeName,
+		PluginType:    plugin.Name(),
 		AutoDiscover:  autoDiscover,
 	}
 
-	registry.pluginTypes[pluginTypeName] = entry
-	slog.Info("Plugin type registered", "type", pluginTypeName, "auto_discover", autoDiscover)
+	registry.pluginTypes[plugin.Name()] = entry
+	slog.Info("Plugin type registered", "type", plugin.Name(), "auto_discover", autoDiscover)
 }
 
 // Register registers a plugin instance with optional configuration
@@ -134,6 +131,9 @@ func Register(plugin Plugin, config Config, opts ...RegisterOptions) {
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
+
+	// Auto-set names for BaseConfig if embedded
+	setBaseConfigName(config, plugin.Name())
 
 	pluginType := plugin.Name()
 	configType := GetConfigTypeName(config)
@@ -256,8 +256,8 @@ func discoverAndRegisterPlugins(configValue reflect.Value, pluginTypes map[strin
 					// This allows the same plugin type to have different instances based on config location
 					instanceName := strings.ToLower(fieldPath)
 
-					// Auto-set names for BasePlugin and BaseConfig if they are embedded
-					setBaseNames(plugin, newConfig, pluginType)
+					// Auto-set names for BaseConfig if embedded
+					setBaseConfigName(newConfig, pluginType)
 
 					// Copy configuration values
 					if err := copyConfigValues(fieldInterface, newConfig); err != nil {
@@ -419,68 +419,19 @@ func ClearGlobalRegistry() {
 	clear(registry.pluginTypes)
 }
 
-// getPluginTypeName derives the plugin type name from plugin and config instances
-// It prioritizes plugin.Name() if available, otherwise falls back to reflection
-func getPluginTypeName(plugin Plugin, config Config) string {
-	// Try to get name from plugin first
-	if name := plugin.Name(); name != "" {
-		return name
-	}
-
-	// Fall back to config type name
-	return GetConfigTypeName(config)
-}
-
-// setBaseNames automatically sets names for embedded BasePlugin and BaseConfig
+// setBaseConfigName automatically sets name for embedded BaseConfig
 // This reduces boilerplate for users who embed these base types
-func setBaseNames(plugin Plugin, config Config, typeName string) {
-	// Set BasePlugin name if embedded
-	if basePlugin := getEmbeddedBasePlugin(plugin); basePlugin != nil {
-		if basePlugin.name == "" {
-			basePlugin.SetName(typeName)
-		}
-	}
-
+// Panics if BaseConfig is not properly embedded to enforce best practices
+func setBaseConfigName(config Config, typeName string) {
 	// Set BaseConfig name if embedded
-	if baseConfig := getEmbeddedBaseConfig(config); baseConfig != nil {
-		if baseConfig.name == "" {
-			baseConfig.SetName(typeName)
-		}
-	}
-}
-
-// getEmbeddedBasePlugin tries to find and return embedded BasePlugin using reflection
-func getEmbeddedBasePlugin(plugin Plugin) *BasePlugin {
-	v := reflect.ValueOf(plugin)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+	baseConfig := getEmbeddedBaseConfig(config)
+	if baseConfig == nil {
+		panic(fmt.Sprintf("Config type %T must embed plugins.BaseConfig. Please add 'plugins.BaseConfig' as an embedded field in your config struct.", config))
 	}
 
-	if v.Kind() != reflect.Struct {
-		return nil
+	if baseConfig.name == "" {
+		baseConfig.SetName(typeName)
 	}
-
-	// Look for embedded BasePlugin field
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldType := v.Type().Field(i)
-
-		// Check if this field is an embedded BasePlugin
-		if fieldType.Anonymous && fieldType.Type == reflect.TypeOf(BasePlugin{}) {
-			if field.CanAddr() {
-				return field.Addr().Interface().(*BasePlugin)
-			}
-		}
-
-		// Check if this field is a pointer to BasePlugin
-		if fieldType.Anonymous && fieldType.Type == reflect.TypeOf(&BasePlugin{}) {
-			if !field.IsNil() {
-				return field.Interface().(*BasePlugin)
-			}
-		}
-	}
-
-	return nil
 }
 
 // getEmbeddedBaseConfig tries to find and return embedded BaseConfig using reflection
@@ -495,7 +446,7 @@ func getEmbeddedBaseConfig(config Config) *BaseConfig {
 	}
 
 	// Look for embedded BaseConfig field
-	for i := 0; i < v.NumField(); i++ {
+	for i := range v.NumField() {
 		field := v.Field(i)
 		fieldType := v.Type().Field(i)
 

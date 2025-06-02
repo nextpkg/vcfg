@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -11,13 +12,9 @@ type TestPlugin struct {
 
 // TestConfig implements Config interface for testing
 type TestConfig struct {
+	BaseConfig
 	Enabled bool   `yaml:"enabled"`
 	Value   string `yaml:"value"`
-}
-
-// Name returns the config type name
-func (c *TestConfig) Name() string {
-	return "test-plugin"
 }
 
 // Name returns the plugin name for identification
@@ -130,6 +127,76 @@ func BenchmarkRegisterPluginType(b *testing.B) {
 		// Register using generics
 		RegisterPluginType[*TestPlugin, *TestConfig]()
 	}
+}
+
+// BadConfig implements Config interface but does NOT embed BaseConfig for testing panic
+type BadConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Value   string `yaml:"value"`
+}
+
+// Name returns the config type name
+func (c *BadConfig) Name() string {
+	return "bad-config"
+}
+
+// BadPlugin implements Plugin interface for testing panic
+type BadPlugin struct {
+	config BadConfig
+}
+
+// Name returns the plugin name for identification
+func (p *BadPlugin) Name() string {
+	return "bad-config"
+}
+
+// Start implements Plugin interface
+func (p *BadPlugin) Start(config any) error {
+	if badConfig, ok := config.(*BadConfig); ok {
+		p.config = *badConfig
+	}
+	return nil
+}
+
+// Reload implements Plugin interface
+func (p *BadPlugin) Reload(config any) error {
+	if badConfig, ok := config.(*BadConfig); ok {
+		p.config = *badConfig
+	}
+	return nil
+}
+
+// Stop implements Plugin interface
+func (p *BadPlugin) Stop() error {
+	return nil
+}
+
+// TestPanicOnMissingBaseConfig tests that panic occurs when BaseConfig is not embedded
+func TestPanicOnMissingBaseConfig(t *testing.T) {
+	// Clear registry before test
+	registry := getGlobalPluginRegistry()
+	registry.mu.Lock()
+	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.mu.Unlock()
+
+	// This should panic because BadConfig doesn't embed BaseConfig
+	defer func() {
+		if r := recover(); r != nil {
+			// Expected panic, check the message
+			if panicMsg, ok := r.(string); ok {
+				if !strings.Contains(panicMsg, "must embed plugins.BaseConfig") {
+					t.Errorf("Expected panic message to contain 'must embed plugins.BaseConfig', got: %s", panicMsg)
+				}
+			} else {
+				t.Errorf("Expected string panic message, got: %v", r)
+			}
+		} else {
+			t.Error("Expected panic when BaseConfig is not embedded, but no panic occurred")
+		}
+	}()
+
+	// This should trigger the panic
+	RegisterPluginType[*BadPlugin, *BadConfig]()
 }
 
 // BenchmarkRegisterInstance benchmarks plugin instance registration

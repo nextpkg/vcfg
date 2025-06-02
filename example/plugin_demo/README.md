@@ -10,8 +10,8 @@ Tests basic plugin registration and discovery functionality:
 go run . api
 ```
 
-### 2. Base Plugin Test (`base`)
-Demonstrates BasePlugin and BaseConfig usage to reduce boilerplate:
+### 2. Base Config Test (`base`)
+Demonstrates BaseConfig usage to reduce boilerplate:
 ```bash
 go run . base
 ```
@@ -30,12 +30,11 @@ go run . isolation
 
 ## Key Features Demonstrated
 
-### 1. BasePlugin and BaseConfig Benefits
-The framework provides embedded base structures to reduce boilerplate:
-- **Automatic Name Management**: No need to implement `Name()` method manually
-- **Default Implementations**: Built-in `Start()`, `Reload()`, and `Stop()` methods
+### 1. BaseConfig Benefits
+The framework provides embedded BaseConfig structure to reduce boilerplate:
+- **Automatic Name Management**: Config names are automatically set during registration
 - **Type Safety**: Full compile-time type checking with generics
-- **Reduced Code**: Minimal boilerplate for plugin development
+- **Reduced Code**: Minimal boilerplate for configuration management
 
 ### 2. Automatic Plugin Discovery
 The framework automatically discovers plugin configurations in your config structure:
@@ -58,11 +57,16 @@ The framework automatically discovers plugin configurations in your config struc
 
 ## Plugin Development Best Practices
 
-### 1. Using BasePlugin and BaseConfig (Recommended)
+### 1. Using BaseConfig (Recommended)
 ```go
-// Plugin implementation with BasePlugin
+// Plugin implementation - implement all required methods
 type KafkaPlugin struct {
-    plugins.BasePlugin // Embed for automatic functionality
+    config KafkaConfig
+}
+
+// Name must be explicitly implemented
+func (k *KafkaPlugin) Name() string {
+    return "kafka"
 }
 
 // Config implementation with BaseConfig
@@ -72,10 +76,20 @@ type KafkaConfig struct {
     Topic           string      `yaml:"topic"`
 }
 
-// Override only what you need
+// Implement all plugin methods
 func (k *KafkaPlugin) Start(config any) error {
     kafkaConfig := config.(*KafkaConfig)
+    k.config = *kafkaConfig
     // Your implementation here
+    return nil
+}
+
+func (k *KafkaPlugin) Reload(config any) error {
+    return k.Start(config)
+}
+
+func (k *KafkaPlugin) Stop() error {
+    // Your cleanup code here
     return nil
 }
 ```
@@ -128,14 +142,6 @@ func (k *OldKafkaPlugin) Stop() error { /* implementation */ }
 3. **智能重载**：只对配置发生变更的插件调用 `Reload` 方法
 4. **多级查找**：优先从注册的插件中查找，然后从全局注册表中查找
 
-## 文件结构
-
-```
-smart_config_demo/
-├── main.go          # 主程序，演示智能配置变更检测
-├── config.yaml      # 配置文件
-└── README.md        # 说明文档
-```
 
 ## 配置结构
 
@@ -180,7 +186,7 @@ func (p *KafkaPlugin) Stop() error { /* ... */ }
 
 ### 1. 启动程序
 ```bash
-cd smart_config_demo
+cd plugin_demo
 go run main.go
 ```
 

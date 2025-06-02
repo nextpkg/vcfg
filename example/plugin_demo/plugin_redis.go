@@ -24,8 +24,12 @@ type RedisConfig struct {
 
 // RedisPlugin represents a Redis plugin
 type RedisPlugin struct {
-	plugins.BasePlugin // Embed BasePlugin for automatic functionality
-	config             RedisConfig
+	config RedisConfig
+}
+
+// Name implements plugins.Plugin interface
+func (p *RedisPlugin) Name() string {
+	return "redis"
 }
 
 // Start implements plugins.Plugin interface

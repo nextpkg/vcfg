@@ -122,10 +122,10 @@ func TestAPI() {
 	fmt.Println("\n=== Test Completed Successfully ===")
 }
 
-// TestBasePluginDemo demonstrates how to use BasePlugin and BaseConfig to reduce boilerplate
-func TestBasePluginDemo() {
-	fmt.Println("=== Base Plugin Demo ===")
-	fmt.Println("This demo shows how to use BasePlugin and BaseConfig to reduce boilerplate code.")
+// TestBaseConfigDemo demonstrates how to use BaseConfig to reduce boilerplate
+func TestBaseConfigDemo() {
+	fmt.Println("=== Base Config Demo ===")
+	fmt.Println("This demo shows how to use BaseConfig to reduce boilerplate code.")
 	fmt.Println()
 
 	// Clear global registry to start fresh
@@ -199,12 +199,12 @@ func TestBasePluginDemo() {
 	fmt.Println("All plugins stopped successfully!")
 	fmt.Println()
 	fmt.Println("=== Base Plugin Demo completed ===")
-	fmt.Println("Key benefits of using BasePlugin and BaseConfig:")
-	fmt.Println("1. No need to implement Name() method manually")
-	fmt.Println("2. Default implementations for Start/Reload/Stop methods")
-	fmt.Println("3. Automatic name assignment during registration")
-	fmt.Println("4. Reduced boilerplate code")
-	fmt.Println("5. Type-safe plugin development")
+	fmt.Println("Key benefits of using BaseConfig:")
+	fmt.Println("1. Automatic config name assignment during registration")
+	fmt.Println("2. Reduced boilerplate code for configuration management")
+	fmt.Println("3. Type-safe plugin development")
+	fmt.Println("4. Simplified configuration structure embedding")
+	fmt.Println("5. Seamless integration with auto-discovery")
 }
 
 // TestHotReload demonstrates that configuration changes only affect individual plugins
@@ -404,7 +404,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Available commands:")
 	fmt.Println("  api        - Test basic plugin API functionality (registration, discovery)")
-	fmt.Println("  base       - Test BasePlugin and BaseConfig functionality")
+	fmt.Println("  base       - Test BaseConfig functionality")
 	fmt.Println("  hotreload  - Test real-time configuration watching and hot reload")
 	fmt.Println("  isolation  - Test configuration change isolation (simulation)")
 	fmt.Println("  live       - Test live configuration change isolation (interactive)")
@@ -436,7 +436,7 @@ func main() {
 	case "api":
 		TestAPI()
 	case "base":
-		TestBasePluginDemo()
+		TestBaseConfigDemo()
 	case "hotreload":
 		TestHotReload()
 	case "isolation":

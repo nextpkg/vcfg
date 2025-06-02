@@ -212,7 +212,7 @@ if err != nil {
 查看 [examples](./example/) 目录获取完整示例：
 
 - **[基础使用](./example/basic_demo/)** - 快速上手和基本功能
-- **[智能配置](./example/smart_config_demo/)** - 智能插件和热重载
+- **[智能配置](./example/plugin_demo/)** - 智能插件和热重载
 - **[CLI 集成](./example/cli_demo/)** - 命令行参数集成
 - **[插件开发](./example/plugins_demo/)** - 自定义插件开发
 - **[配置监听](./example/watch_demo/)** - 文件变更监听

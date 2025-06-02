@@ -23,14 +23,16 @@ type KafkaConfig struct {
 
 // KafkaPlugin represents a Kafka plugin
 type KafkaPlugin struct {
-	plugins.BasePlugin // Embed BasePlugin for automatic functionality
-	config             KafkaConfig
+	config KafkaConfig
+}
+
+// Name implements plugins.Plugin interface
+func (p *KafkaPlugin) Name() string {
+	return "kafka"
 }
 
 // Start implements plugins.Plugin interface
 func (p *KafkaPlugin) Start(config any) error {
-	slog.Info("Kafka Start Point", "addr", p)
-
 	if kafkaConfig, ok := config.(*KafkaConfig); ok {
 		p.config = *kafkaConfig
 		slog.Info("Kafka plugin started", "bootstrap_servers", kafkaConfig.BootstrapServers, "topic", kafkaConfig.Topic)

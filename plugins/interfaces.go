@@ -35,12 +35,6 @@ type (
 		Name() string
 	}
 
-	// BasePlugin provides a default implementation for common plugin functionality
-	// Users can embed this struct to reduce boilerplate code
-	BasePlugin struct {
-		name string
-	}
-
 	// BaseConfig provides a default implementation for plugin configuration
 	// Users can embed this struct to reduce boilerplate code
 	BaseConfig struct {
@@ -48,44 +42,10 @@ type (
 	}
 )
 
-// NewBasePlugin creates a new BasePlugin with the given name
-// This function automatically sets the plugin name based on the type
-func NewBasePlugin(name string) BasePlugin {
-	return BasePlugin{name: name}
-}
-
 // NewBaseConfig creates a new BaseConfig with the given name
 // This function automatically sets the config name based on the type
 func NewBaseConfig(name string) BaseConfig {
 	return BaseConfig{name: name}
-}
-
-// Name returns the plugin name
-func (bp *BasePlugin) Name() string {
-	return bp.name
-}
-
-// SetName sets the plugin name (used internally during registration)
-func (bp *BasePlugin) SetName(name string) {
-	bp.name = name
-}
-
-// Start provides a default implementation that does nothing
-// Users can override this method if needed
-func (bp *BasePlugin) Start(config any) error {
-	return nil
-}
-
-// Reload provides a default implementation that calls Start
-// Users can override this method if needed
-func (bp *BasePlugin) Reload(config any) error {
-	return bp.Start(config)
-}
-
-// Stop provides a default implementation that does nothing
-// Users can override this method if needed
-func (bp *BasePlugin) Stop() error {
-	return nil
 }
 
 // Name returns the config name
