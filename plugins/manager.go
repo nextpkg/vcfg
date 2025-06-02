@@ -26,7 +26,7 @@ func (pm *PluginManager[T]) Register(plugin Plugin, config Config) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	pluginType := GetPluginTypeName(plugin)
+	pluginType := plugin.Name()
 	configType := GetConfigTypeName(config)
 
 	if pluginType != configType {
@@ -34,7 +34,7 @@ func (pm *PluginManager[T]) Register(plugin Plugin, config Config) error {
 	}
 
 	// Get or generate instance name
-	instanceName := getInstanceName(config)
+	instanceName := GetConfigTypeName(config)
 	pluginKey := makePluginKey(pluginType, instanceName)
 
 	// For manual registration, instance name is derived from config type name
@@ -53,6 +53,40 @@ func (pm *PluginManager[T]) Register(plugin Plugin, config Config) error {
 
 	pm.plugins[pluginKey] = entry
 	slog.Info("Plugin registered",
+		"plugin_type", pluginType,
+		"instance", instanceName,
+		"key", pluginKey)
+	return nil
+}
+
+// RegisterWithInstance registers a plugin with a specific instance name
+func (pm *PluginManager[T]) RegisterWithInstance(plugin Plugin, config Config, instanceName string) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	pluginType := plugin.Name()
+	configType := GetConfigTypeName(config)
+
+	if pluginType != configType {
+		return fmt.Errorf("plugin type mismatch: %s != %s", pluginType, configType)
+	}
+
+	pluginKey := makePluginKey(pluginType, instanceName)
+
+	if _, exists := pm.plugins[pluginKey]; exists {
+		return fmt.Errorf("plugin instance %s already registered", pluginKey)
+	}
+
+	entry := &PluginEntry{
+		Plugin:       plugin,
+		Config:       config,
+		PluginType:   pluginType,
+		InstanceName: instanceName,
+		started:      false,
+	}
+
+	pm.plugins[pluginKey] = entry
+	slog.Info("Plugin registered with instance",
 		"plugin_type", pluginType,
 		"instance", instanceName,
 		"key", pluginKey)

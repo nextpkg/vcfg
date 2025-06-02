@@ -38,6 +38,14 @@ type DatabaseConfig struct {
 	Database string `yaml:"database"`
 }
 
+// BasePluginConfig represents a configuration structure for demonstrating BasePlugin usage
+type BasePluginConfig struct {
+	KafkaProducer *KafkaConfig `yaml:"kafka_producer" json:"kafka_producer"`
+	KafkaConsumer *KafkaConfig `yaml:"kafka_consumer" json:"kafka_consumer"`
+	RedisCache    *RedisConfig `yaml:"redis_cache" json:"redis_cache"`
+	RedisSession  *RedisConfig `yaml:"redis_session" json:"redis_session"`
+}
+
 // TestAPI demonstrates basic plugin registration and discovery functionality
 func TestAPI() {
 	fmt.Println("=== Plugin API Test ===")
@@ -55,8 +63,8 @@ func TestAPI() {
 
 	// Test 1: Register plugin types
 	fmt.Println("=== Test 1: Plugin Type Registration ===")
-	plugins.RegisterType[*KafkaPlugin, *KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
-	plugins.RegisterType[*RedisPlugin, *RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*KafkaPlugin, *KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*RedisPlugin, *RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
 
 	types := plugins.ListPluginTypes()
 	fmt.Printf("Registered plugin types: %v\n", types)
@@ -80,6 +88,8 @@ func TestAPI() {
 	}
 	fmt.Println("Auto-registration completed")
 
+	cm.StartAllPlugins(context.Background())
+
 	// Test 4: List registered plugins
 	fmt.Println("\n=== Test 4: List Registered Plugins ===")
 	registeredPlugins := plugins.ListGlobalPlugins()
@@ -89,26 +99,112 @@ func TestAPI() {
 	fmt.Println("\n=== Test 5: Get Specific Plugins ===")
 	kafkaPlugin, exists := plugins.GetGlobalPlugin("kafka", "kafka")
 	if exists && kafkaPlugin != nil {
-		fmt.Printf("Found kafka plugin: %s (instance: %s)\n", plugins.GetPluginTypeName(kafkaPlugin.Plugin), kafkaPlugin.InstanceName)
+
+		fmt.Printf("Found kafka plugin: %s (instance: %s)\n", kafkaPlugin.Plugin.Name(), kafkaPlugin.InstanceName)
 	}
 
 	kafka1Plugin, exists := plugins.GetGlobalPlugin("kafka", "kafka1")
 	if exists && kafka1Plugin != nil {
-		fmt.Printf("Found kafka1 plugin: %s (instance: %s)\n", plugins.GetPluginTypeName(kafka1Plugin.Plugin), kafka1Plugin.InstanceName)
+		fmt.Printf("Found kafka1 plugin: %s (instance: %s)\n", kafka1Plugin.Plugin.Name(), kafka1Plugin.InstanceName)
 	}
 
 	// Check for client.kafka instance
 	clientKafkaPlugin, exists := plugins.GetGlobalPlugin("kafka", "client.kafka")
 	if exists && clientKafkaPlugin != nil {
-		fmt.Printf("Found client.kafka plugin: %s (instance: %s)\n", plugins.GetPluginTypeName(clientKafkaPlugin.Plugin), clientKafkaPlugin.InstanceName)
+		fmt.Printf("Found client.kafka plugin: %s (instance: %s)\n", clientKafkaPlugin.Plugin.Name(), clientKafkaPlugin.InstanceName)
 	}
 
 	redisPlugin, exists := plugins.GetGlobalPlugin("redis", "redis")
 	if exists && redisPlugin != nil {
-		fmt.Printf("Found redis plugin: %s (instance: %s)\n", plugins.GetPluginTypeName(redisPlugin.Plugin), redisPlugin.InstanceName)
+		fmt.Printf("Found redis plugin: %s (instance: %s)\n", redisPlugin.Plugin.Name(), redisPlugin.InstanceName)
 	}
 
 	fmt.Println("\n=== Test Completed Successfully ===")
+}
+
+// TestBasePluginDemo demonstrates how to use BasePlugin and BaseConfig to reduce boilerplate
+func TestBasePluginDemo() {
+	fmt.Println("=== Base Plugin Demo ===")
+	fmt.Println("This demo shows how to use BasePlugin and BaseConfig to reduce boilerplate code.")
+	fmt.Println()
+
+	// Clear global registry to start fresh
+	plugins.ClearGlobalRegistry()
+
+	// Register plugin types - notice how simple this is now!
+	// No need to manually implement Name() methods
+	plugins.RegisterPluginType[*KafkaPlugin, *KafkaConfig]()
+	plugins.RegisterPluginType[*RedisPlugin, *RedisConfig]()
+
+	fmt.Println("Plugin types registered successfully!")
+	fmt.Println()
+
+	// Create sample configuration with multiple instances
+	baseConfig := &BasePluginConfig{
+		KafkaProducer: &KafkaConfig{
+			BootstrapServers: "localhost:9092,localhost:9093",
+			Topic:            "events",
+		},
+		KafkaConsumer: &KafkaConfig{
+			BootstrapServers: "localhost:9092",
+			Topic:            "notifications",
+		},
+		RedisCache: &RedisConfig{
+			Host: "localhost",
+			Port: 6379,
+			DB:   0,
+		},
+		RedisSession: &RedisConfig{
+			Host: "localhost",
+			Port: 6379,
+			DB:   1,
+		},
+	}
+
+	// Auto-discover and register plugin instances
+	if err := plugins.AutoRegisterPlugins(baseConfig); err != nil {
+		fmt.Printf("Failed to auto-register plugins: %v\n", err)
+		return
+	}
+
+	fmt.Println("Plugins auto-discovered and registered!")
+	fmt.Println()
+
+	// Start all plugins
+	if err := plugins.StartAllPlugins(); err != nil {
+		fmt.Printf("Failed to start plugins: %v\n", err)
+		return
+	}
+
+	fmt.Println()
+	fmt.Println("All plugins started successfully!")
+	fmt.Println()
+
+	// List all registered plugins
+	fmt.Println("Registered plugin instances:")
+	for _, entry := range plugins.ListAllPlugins() {
+		fmt.Printf("  - Type: %s, Instance: %s, Path: %s\n",
+			entry.PluginType, entry.InstanceName, entry.ConfigPath)
+	}
+
+	fmt.Println()
+
+	// Stop all plugins
+	if err := plugins.StopAllPlugins(); err != nil {
+		fmt.Printf("Failed to stop plugins: %v\n", err)
+		return
+	}
+
+	fmt.Println()
+	fmt.Println("All plugins stopped successfully!")
+	fmt.Println()
+	fmt.Println("=== Base Plugin Demo completed ===")
+	fmt.Println("Key benefits of using BasePlugin and BaseConfig:")
+	fmt.Println("1. No need to implement Name() method manually")
+	fmt.Println("2. Default implementations for Start/Reload/Stop methods")
+	fmt.Println("3. Automatic name assignment during registration")
+	fmt.Println("4. Reduced boilerplate code")
+	fmt.Println("5. Type-safe plugin development")
 }
 
 // TestHotReload demonstrates that configuration changes only affect individual plugins
@@ -118,8 +214,8 @@ func TestHotReload() {
 	fmt.Println()
 
 	// Register plugin types
-	plugins.RegisterType[*KafkaPlugin, *KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
-	plugins.RegisterType[*RedisPlugin, *RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*KafkaPlugin, *KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*RedisPlugin, *RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
 
 	// Load initial configuration
 	cm := vcfg.New[Config]("config.yaml")
@@ -170,8 +266,8 @@ func TestConfigChangeIsolation() {
 	fmt.Println()
 
 	// Register plugin types
-	plugins.RegisterType[*KafkaPlugin, *KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
-	plugins.RegisterType[*RedisPlugin, *RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*KafkaPlugin, *KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*RedisPlugin, *RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
 
 	// Load initial configuration
 	cm := vcfg.New[Config]("config.yaml")
@@ -254,8 +350,8 @@ func TestConfigIsolation() {
 	fmt.Println()
 
 	// Register plugins with unique names to track reloads
-	plugins.RegisterType[*KafkaPlugin, KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
-	plugins.RegisterType[*RedisPlugin, RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*KafkaPlugin, KafkaConfig](plugins.RegisterOptions{AutoDiscover: true})
+	plugins.RegisterPluginType[*RedisPlugin, RedisConfig](plugins.RegisterOptions{AutoDiscover: true})
 
 	// Auto-register plugins based on configuration
 	if err := cm.AutoRegisterPlugins(); err != nil {
@@ -308,6 +404,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Available commands:")
 	fmt.Println("  api        - Test basic plugin API functionality (registration, discovery)")
+	fmt.Println("  base       - Test BasePlugin and BaseConfig functionality")
 	fmt.Println("  hotreload  - Test real-time configuration watching and hot reload")
 	fmt.Println("  isolation  - Test configuration change isolation (simulation)")
 	fmt.Println("  live       - Test live configuration change isolation (interactive)")
@@ -338,6 +435,8 @@ func main() {
 	switch command {
 	case "api":
 		TestAPI()
+	case "base":
+		TestBasePluginDemo()
 	case "hotreload":
 		TestHotReload()
 	case "isolation":

@@ -2,6 +2,117 @@
 
 这个示例展示了 `vcfg` 的智能配置变更检测功能，能够自动识别配置变更并精确重载相关插件。
 
+## Available Commands
+
+### 1. API Test (`api`)
+Tests basic plugin registration and discovery functionality:
+```bash
+go run . api
+```
+
+### 2. Base Plugin Test (`base`)
+Demonstrates BasePlugin and BaseConfig usage to reduce boilerplate:
+```bash
+go run . base
+```
+
+### 3. Hot Reload Test (`hotreload`)
+Demonstrates real-time configuration watching:
+```bash
+go run . hotreload
+```
+
+### 4. Isolation Test (`isolation`)
+Simulates configuration changes to show plugin isolation:
+```bash
+go run . isolation
+```
+
+## Key Features Demonstrated
+
+### 1. BasePlugin and BaseConfig Benefits
+The framework provides embedded base structures to reduce boilerplate:
+- **Automatic Name Management**: No need to implement `Name()` method manually
+- **Default Implementations**: Built-in `Start()`, `Reload()`, and `Stop()` methods
+- **Type Safety**: Full compile-time type checking with generics
+- **Reduced Code**: Minimal boilerplate for plugin development
+
+### 2. Automatic Plugin Discovery
+The framework automatically discovers plugin configurations in your config structure:
+- Traverses nested configuration structures
+- Identifies fields that implement the `Config` interface
+- Automatically instantiates and registers corresponding plugins
+- Supports multiple instances of the same plugin type
+
+### 3. Smart Configuration Management
+- **Type Safety**: Full compile-time type checking
+- **Auto-Discovery**: No manual plugin registration needed
+- **Multi-Instance Support**: Multiple instances of the same plugin type
+- **Path-Based Naming**: Instance names derived from configuration paths
+
+### 4. Hot Reload Capabilities
+- **Real-time Watching**: Monitors configuration file changes
+- **Selective Reloading**: Only affected plugins are reloaded
+- **Change Detection**: Uses deep comparison to detect actual changes
+- **Graceful Handling**: Proper error handling and logging
+
+## Plugin Development Best Practices
+
+### 1. Using BasePlugin and BaseConfig (Recommended)
+```go
+// Plugin implementation with BasePlugin
+type KafkaPlugin struct {
+    plugins.BasePlugin // Embed for automatic functionality
+}
+
+// Config implementation with BaseConfig
+type KafkaConfig struct {
+    plugins.BaseConfig          // Embed for automatic functionality
+    BootstrapServers string     `yaml:"bootstrap_servers"`
+    Topic           string      `yaml:"topic"`
+}
+
+// Override only what you need
+func (k *KafkaPlugin) Start(config any) error {
+    kafkaConfig := config.(*KafkaConfig)
+    // Your implementation here
+    return nil
+}
+```
+
+### 2. Configuration Structure
+```go
+type Config struct {
+    Kafka  KafkaConfig  `yaml:"kafka"`
+    Kafka1 KafkaConfig  `yaml:"kafka1"`
+    Redis  RedisConfig  `yaml:"redis"`
+    Client ClientConfig `yaml:"client"`
+}
+
+type ClientConfig struct {
+    Kafka KafkaConfig `yaml:"kafka"`
+}
+```
+
+### 3. Simple Registration
+```go
+// No manual name management needed!
+plugins.RegisterPluginType[*KafkaPlugin, *KafkaConfig]()
+plugins.RegisterPluginType[*RedisPlugin, *RedisConfig]()
+```
+
+### 4. Legacy Plugin Implementation (Not Recommended)
+```go
+type OldKafkaPlugin struct {
+    name string
+}
+
+func (k *OldKafkaPlugin) Name() string { return k.name }
+func (k *OldKafkaPlugin) Start(config any) error { /* implementation */ }
+func (k *OldKafkaPlugin) Reload(config any) error { /* implementation */ }
+func (k *OldKafkaPlugin) Stop() error { /* implementation */ }
+```
+
 ## 功能特性
 
 ### 🎯 智能检测

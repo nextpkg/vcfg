@@ -1,7 +1,0 @@
-name: "Global Plugin Demo"
-server:
-  host: "localhost"
-  port: 9090
-cache:
-  max_size: 2000
-  ttl: "10m"

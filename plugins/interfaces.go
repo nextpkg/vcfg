@@ -9,6 +9,9 @@ type (
 	// Plugin defines the generic plugin interface
 	// This is a type-safe plugin interface that provides hot reload capability with minimal boilerplate
 	Plugin interface {
+		// Name returns the plugin name for identification
+		Name() string
+
 		// Start initializes the plugin with configuration
 		// This method is called when the plugin is first loaded
 		Start(config any) error
@@ -23,9 +26,7 @@ type (
 
 	// Config defines the generic plugin configuration interface
 	// Note: Instance names are derived from config field paths, not from this method
-	Config interface {
-		// Empty interface - plugins can optionally implement Namer for custom names
-	}
+	Config any
 
 	// Namer is an optional interface that plugins and configs can implement
 	// to provide custom type names instead of using reflection-based naming
@@ -33,32 +34,132 @@ type (
 		// Name returns the unique name of the plugin type
 		Name() string
 	}
-)
 
-// GetPluginTypeName extracts the plugin type name, preferring custom Name() method over reflection
-func GetPluginTypeName(plugin Plugin) string {
-	// Check if plugin implements Namer interface for custom naming
-	if namer, ok := plugin.(Namer); ok {
-		return namer.Name()
+	// BasePlugin provides a default implementation for common plugin functionality
+	// Users can embed this struct to reduce boilerplate code
+	BasePlugin struct {
+		name string
 	}
 
-	// Fall back to reflection-based naming
-	return getTypeNameByReflection(plugin)
+	// BaseConfig provides a default implementation for plugin configuration
+	// Users can embed this struct to reduce boilerplate code
+	BaseConfig struct {
+		name string
+	}
+)
+
+// NewBasePlugin creates a new BasePlugin with the given name
+// This function automatically sets the plugin name based on the type
+func NewBasePlugin(name string) BasePlugin {
+	return BasePlugin{name: name}
+}
+
+// NewBaseConfig creates a new BaseConfig with the given name
+// This function automatically sets the config name based on the type
+func NewBaseConfig(name string) BaseConfig {
+	return BaseConfig{name: name}
+}
+
+// Name returns the plugin name
+func (bp *BasePlugin) Name() string {
+	return bp.name
+}
+
+// SetName sets the plugin name (used internally during registration)
+func (bp *BasePlugin) SetName(name string) {
+	bp.name = name
+}
+
+// Start provides a default implementation that does nothing
+// Users can override this method if needed
+func (bp *BasePlugin) Start(config any) error {
+	return nil
+}
+
+// Reload provides a default implementation that calls Start
+// Users can override this method if needed
+func (bp *BasePlugin) Reload(config any) error {
+	return bp.Start(config)
+}
+
+// Stop provides a default implementation that does nothing
+// Users can override this method if needed
+func (bp *BasePlugin) Stop() error {
+	return nil
+}
+
+// Name returns the config name
+func (bc *BaseConfig) Name() string {
+	return bc.name
+}
+
+// SetName sets the config name (used internally during registration)
+func (bc *BaseConfig) SetName(name string) {
+	bc.name = name
 }
 
 // GetConfigTypeName extracts the config type name, preferring custom Name() method over reflection
 func GetConfigTypeName(config Config) string {
 	// Check if config implements Namer interface for custom naming
 	if namer, ok := config.(Namer); ok {
-		return namer.Name()
+		if name := namer.Name(); name != "" {
+			return name
+		}
+	}
+
+	// Check if config is directly a BaseConfig with a name set
+	if baseConfig, ok := config.(*BaseConfig); ok && baseConfig.name != "" {
+		return baseConfig.name
+	}
+
+	// Use reflection to check for embedded BaseConfig
+	if name := getNameFromEmbeddedBase(config); name != "" {
+		return name
 	}
 
 	// Fall back to reflection-based naming
 	return getTypeNameByReflection(config)
 }
 
+// getNameFromEmbeddedBase tries to extract name from embedded BaseConfig using reflection
+func getNameFromEmbeddedBase(config Config) string {
+	v := reflect.ValueOf(config)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	if v.Kind() != reflect.Struct {
+		return ""
+	}
+
+	// Look for embedded BaseConfig field
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := v.Type().Field(i)
+
+		// Check if this field is an embedded BaseConfig
+		if fieldType.Anonymous && fieldType.Type == reflect.TypeOf(BaseConfig{}) {
+			if baseConfig, ok := field.Interface().(BaseConfig); ok {
+				// Return the name if it's set, otherwise return empty to continue with fallback
+				return baseConfig.name
+			}
+		}
+
+		// Check if this field is a pointer to BaseConfig
+		if fieldType.Anonymous && fieldType.Type == reflect.TypeOf(&BaseConfig{}) {
+			if !field.IsNil() {
+				if baseConfig, ok := field.Interface().(*BaseConfig); ok {
+					// Return the name if it's set, otherwise return empty to continue with fallback
+					return baseConfig.name
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
 // getTypeNameByReflection derives type name from struct name using reflection
-// This function automatically removes common suffixes and converts to lowercase
 func getTypeNameByReflection(v any) string {
 	t := reflect.TypeOf(v)
 	if t.Kind() == reflect.Ptr {

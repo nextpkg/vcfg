@@ -40,7 +40,7 @@ func MustInit[T any](sources ...any) *ConfigManager[T] {
 // RegisterGlobalPlugin registers a plugin globally
 // The plugin will be automatically registered to any ConfigManager created afterwards
 func RegisterGlobalPlugin(plugin plugins.Plugin, config plugins.Config) {
-	plugins.RegisterGlobalPlugin(plugin, config)
+	plugins.Register(plugin, config)
 }
 
 // UnregisterGlobalPlugin removes a plugin from global registry

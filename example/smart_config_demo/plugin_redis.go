@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log/slog"
+
+	"github.com/nextpkg/vcfg/plugins"
 )
 
 // func init() {
@@ -13,22 +15,18 @@ import (
 
 // RedisConfig represents Redis plugin configuration
 type RedisConfig struct {
-	Host     string `json:"host" yaml:"host"`
-	Port     int    `json:"port" yaml:"port"`
-	Password string `json:"password" yaml:"password"`
-	DB       int    `json:"db" yaml:"db"`
+	plugins.BaseConfig        // Embed BaseConfig for automatic functionality
+	Host               string `json:"host" yaml:"host"`
+	Port               int    `json:"port" yaml:"port"`
+	Password           string `json:"password" yaml:"password"`
+	DB                 int    `json:"db" yaml:"db"`
 }
-
-// Note: Name() method is now optional. If not implemented, the framework
-// will automatically derive the type name from the struct name ("redisconfig" -> "redis")
 
 // RedisPlugin represents a Redis plugin
 type RedisPlugin struct {
-	config RedisConfig
+	plugins.BasePlugin // Embed BasePlugin for automatic functionality
+	config             RedisConfig
 }
-
-// Note: Name() method is now optional. If not implemented, the framework
-// will automatically derive the type name from the struct name ("redisplugin" -> "redis")
 
 // Start implements plugins.Plugin interface
 func (p *RedisPlugin) Start(config any) error {

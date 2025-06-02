@@ -63,10 +63,10 @@ func newManager[T any](sources ...any) *ConfigManager[T] {
 
 	// 应用全局注册的插件
 	for _, entry := range plugins.ListGlobalPlugins() {
-		if err := cm.pluginManager.Register(entry.Plugin, entry.Config); err != nil {
-			slog.Error("Failed to register global plugin", "plugin", plugins.GetPluginTypeName(entry.Plugin), "error", err)
+		if err := cm.pluginManager.RegisterWithInstance(entry.Plugin, entry.Config, entry.InstanceName); err != nil {
+			slog.Error("Failed to register global plugin", "plugin", entry.Plugin.Name(), "error", err)
 		} else {
-			slog.Info("Global plugin registered", "plugin", plugins.GetPluginTypeName(entry.Plugin))
+			slog.Info("Global plugin registered", "plugin", entry.Plugin.Name())
 		}
 	}
 
@@ -244,7 +244,7 @@ func (cm *ConfigManager[T]) AutoRegisterPlugins() error {
 	for key, entry := range globalPlugins {
 		// Check if plugin is already registered locally
 		if _, exists := cm.pluginManager.Get(key); !exists {
-			if err := cm.pluginManager.Register(entry.Plugin, entry.Config); err != nil {
+			if err := cm.pluginManager.RegisterWithInstance(entry.Plugin, entry.Config, entry.InstanceName); err != nil {
 				slog.Warn("Failed to register auto-discovered plugin locally", "key", key, "error", err)
 			}
 		}
