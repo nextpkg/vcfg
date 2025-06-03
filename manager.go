@@ -1,7 +1,6 @@
 package vcfg
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -54,23 +53,12 @@ func newManager[T any](sources ...any) *ConfigManager[T] {
 		panic(err)
 	}
 
-	cm := &ConfigManager[T]{
-		providers: providerConfigs,
-		koanf:     koanf.New("."),
-		watchers:  make([]func(), 0),
+	return &ConfigManager[T]{
+		providers:     providerConfigs,
+		koanf:         koanf.New("."),
+		watchers:      make([]func(), 0),
+		pluginManager: plugins.NewPluginManager[T](),
 	}
-	cm.pluginManager = plugins.NewPluginManager[T]()
-
-	// 应用全局注册的插件
-	for _, entry := range plugins.ListGlobalPlugins() {
-		if err := cm.pluginManager.RegisterWithInstance(entry.Plugin, entry.Config, entry.InstanceName); err != nil {
-			slog.Error("Failed to register global plugin", "plugin", entry.Plugin.Name(), "error", err)
-		} else {
-			slog.Info("Global plugin registered", "plugin", entry.Plugin.Name())
-		}
-	}
-
-	return cm
 }
 
 // load loads configuration from sources, validates it, and returns the configuration struct.
@@ -122,9 +110,6 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 		return nil, NewParseError("defaults", "failed to set default values", err)
 	}
 
-	// 添加调试信息
-	slog.Debug("Koanf all keys", "keys", cm.koanf.All())
-
 	err = cm.koanf.Unmarshal("", &cfg)
 	if err != nil {
 		return nil, NewParseError("koanf", "failed to unmarshal configuration", err)
@@ -134,8 +119,6 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	if err != nil {
 		return nil, NewValidationError("validator", "configuration validation failed", err)
 	}
-
-	// 配置加载完成，插件将在StartAllPlugins时启动
 
 	return &cfg, nil
 }
@@ -172,7 +155,10 @@ func (cm *ConfigManager[T]) EnableWatch() {
 
 					// Handle plugin configuration changes intelligently
 					if oldConfig != nil {
-						cm.pluginManager.HandleSmartConfigChange(context.Background(), oldConfig, newConfig)
+						if err := cm.pluginManager.HandleSmartConfigChange(oldConfig, newConfig); err != nil {
+							slog.Error("Failed to handle smart plugin reload", "error", err)
+							return
+						}
 					}
 
 					slog.Debug("Configuration reloaded successfully")
@@ -219,12 +205,6 @@ func (cm *ConfigManager[T]) Get() *T {
 	return ret
 }
 
-// RegisterPlugin 注册插件（推荐使用）
-// 这是用户注册插件的最简单方式，只需要实现Plugin接口
-func (cm *ConfigManager[T]) RegisterPlugin(plugin plugins.Plugin, config plugins.Config) error {
-	return cm.pluginManager.Register(plugin, config)
-}
-
 // AutoRegisterPlugins automatically discovers and registers plugin instances based on current configuration
 // This method uses the global plugin type registry to automatically instantiate and register plugins
 // for any configuration field that matches a registered plugin type
@@ -234,50 +214,26 @@ func (cm *ConfigManager[T]) AutoRegisterPlugins() error {
 		return fmt.Errorf("no configuration available for auto-registration")
 	}
 
-	// Use global auto-registration
-	if err := plugins.AutoRegisterPlugins(config); err != nil {
-		return fmt.Errorf("failed to auto-register plugins: %w", err)
+	// Use auto-registration
+	return cm.pluginManager.Initialize(config)
+}
+
+// StartPlugins starts all registered plugins
+// This method should be called after AutoRegisterPlugins to start the plugin instances
+func (cm *ConfigManager[T]) StartPlugins() error {
+	if cm == nil || cm.pluginManager == nil {
+		return fmt.Errorf("config manager or plugin manager not initialized")
 	}
+	return cm.pluginManager.Startup()
+}
 
-	// Copy globally registered plugins to local plugin manager
-	globalPlugins := plugins.Clone()
-	for key, entry := range globalPlugins {
-		// Check if plugin is already registered locally
-		if _, exists := cm.pluginManager.Get(key); !exists {
-			if err := cm.pluginManager.RegisterWithInstance(entry.Plugin, entry.Config, entry.InstanceName); err != nil {
-				slog.Warn("Failed to register auto-discovered plugin locally", "key", key, "error", err)
-			}
-		}
+// StopPlugins stops all running plugins
+// This method gracefully stops all plugin instances
+func (cm *ConfigManager[T]) StopPlugins() error {
+	if cm == nil || cm.pluginManager == nil {
+		return fmt.Errorf("config manager or plugin manager not initialized")
 	}
-
-	return nil
-}
-
-// UnregisterPlugin 注销插件
-func (cm *ConfigManager[T]) UnregisterPlugin(name string) error {
-	return cm.pluginManager.Unregister(name)
-}
-
-// GetPlugin 获取插件
-func (cm *ConfigManager[T]) GetPlugin(name string) (plugins.Plugin, bool) {
-	return cm.pluginManager.Get(name)
-}
-
-// ListPlugins 列出所有插件
-func (cm *ConfigManager[T]) ListPlugins() []string {
-	return cm.pluginManager.List()
-}
-
-// StartAllPlugins 启动所有插件
-// 通常在应用启动时调用一次
-func (cm *ConfigManager[T]) StartAllPlugins(ctx context.Context) error {
-	return cm.pluginManager.StartAll(ctx)
-}
-
-// StopAllPlugins 停止所有插件
-// 通常在应用关闭时调用
-func (cm *ConfigManager[T]) StopAllPlugins(ctx context.Context) error {
-	return cm.pluginManager.StopAll(ctx)
+	return cm.pluginManager.Shutdown()
 }
 
 // Close 关闭配置管理器，包括所有插件和监听器
@@ -290,13 +246,5 @@ func (cm *ConfigManager[T]) Close() error {
 	cm.DisableWatch()
 
 	// 关闭所有插件
-	ctx := context.Background()
-
-	// 停止插件
-	if err := cm.pluginManager.StopAll(ctx); err != nil {
-		slog.Error("Failed to stop plugins", "error", err)
-	}
-
-	// 关闭复杂插件
-	return cm.pluginManager.Shutdown(ctx)
+	return cm.pluginManager.Shutdown()
 }

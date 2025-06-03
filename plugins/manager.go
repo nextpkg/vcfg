@@ -1,9 +1,9 @@
 package plugins
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"reflect"
 	"strings"
 	"sync"
@@ -11,7 +11,7 @@ import (
 
 type PluginManager[T any] struct {
 	mu      sync.RWMutex
-	plugins map[string]*PluginEntry
+	plugins map[string]*PluginEntry // // key: pluginType:instanceName
 }
 
 func NewPluginManager[T any]() *PluginManager[T] {
@@ -20,81 +20,122 @@ func NewPluginManager[T any]() *PluginManager[T] {
 	}
 }
 
-// Register registers a plugin with the manager
-// Supports multi-instance plugins by using pluginType:instanceName as the key
-func (pm *PluginManager[T]) Register(plugin Plugin, config Config) error {
+func (pm *PluginManager[T]) Initialize(config *T) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	pluginType := plugin.Name()
-	configType := GetConfigTypeName(config)
-
-	if pluginType != configType {
-		return fmt.Errorf("plugin type mismatch: %s != %s", pluginType, configType)
+	pluginTypes := clonePluginTypes()
+	if len(pluginTypes) == 0 {
+		slog.Debug("No plugin types registered for auto-discovery")
+		return nil
 	}
 
-	// Get or generate instance name
-	instanceName := GetConfigTypeName(config)
-	pluginKey := makePluginKey(pluginType, instanceName)
+	var discover func(reflect.Value, string) error
+	discover = func(configValue reflect.Value, currentPath string) error {
+		// Handle pointers
+		if configValue.Kind() == reflect.Ptr {
+			configValue = configValue.Elem()
+		}
 
-	// For manual registration, instance name is derived from config type name
+		if !configValue.IsValid() || configValue.Kind() != reflect.Struct {
+			return fmt.Errorf("invalid config value")
+		}
 
-	if _, exists := pm.plugins[pluginKey]; exists {
-		return fmt.Errorf("plugin instance %s already registered", pluginKey)
+		configType := configValue.Type()
+		for i := range configValue.NumField() {
+			fieldType := configType.Field(i)
+			fieldValue := configValue.Field(i)
+
+			// Skip unexported fields
+			if !fieldValue.CanInterface() {
+				continue
+			}
+
+			// Build current field path
+			fieldPath := getFieldPath(currentPath, fieldType.Name)
+
+			// Check for pointer type configs and provide helpful error message
+			if fieldValue.Kind() == reflect.Ptr {
+				// Check if pointer points to a struct that implements Config interface
+				if fieldValue.Type().Elem().Kind() == reflect.Struct {
+					// Create a zero value instance to check if it implements Config interface
+					zeroValue := reflect.New(fieldValue.Type().Elem()).Interface()
+					if _, ok := zeroValue.(Config); ok {
+						return fmt.Errorf("配置字段 '%s' 使用了指针类型 '%s'，请改为值类型 '%s'。指针类型配置可能导致意外的共享状态和内存问题",
+							fieldPath, fieldValue.Type(), fieldValue.Type().Elem())
+					}
+				}
+			}
+
+			// Check if this field implements Config interface
+			if fieldValue.Kind() == reflect.Struct && fieldValue.CanAddr() {
+				fieldInterface := fieldValue.Addr().Interface()
+				if oldConfig, ok := fieldInterface.(Config); ok {
+					pluginType := getConfigType(oldConfig)
+
+					slog.Debug("Found config field", "path", fieldPath, "type", pluginType)
+
+					// Check if we have a registered plugin type for this config
+					entry, exists := pluginTypes[pluginType]
+					if !exists {
+						return fmt.Errorf("config field does not have a registered plugin type, type=%s", pluginType)
+					}
+
+					// Create newPlugin and config instances
+					newPlugin := entry.PluginFactory()
+					newConfig := entry.ConfigFactory()
+
+					// Copy configuration values from oldConfig to newConfig
+					if err := copyConfig(oldConfig, newConfig); err != nil {
+						return fmt.Errorf("failed to copy config for %s: %w", fieldPath, err)
+					}
+
+					// Use field path as instance name to support multiple instances
+					// This allows the same plugin type to have different instances based on config location
+					instanceName := strings.ToLower(fieldPath)
+
+					pluginKey := getPluginKey(pluginType, instanceName)
+
+					// Check if plugin instance already exists
+					if _, exists := pm.plugins[pluginKey]; exists {
+						return fmt.Errorf("plugin instance %s already registered", pluginKey)
+					}
+
+					pm.plugins[pluginKey] = &PluginEntry{
+						Plugin:       newPlugin,
+						Config:       newConfig,
+						PluginType:   pluginType,
+						InstanceName: instanceName,
+						ConfigPath:   fieldPath,
+						started:      false,
+					}
+
+					slog.Debug("Plugin registered",
+						"type", entry.PluginType,
+						"instance", instanceName,
+						"key", pluginKey,
+						"config_path", fieldPath,
+					)
+
+					// Continue to process other fields instead of returning
+					continue
+				}
+			}
+
+			// Recursively process nested structures
+			if (fieldValue.Kind() == reflect.Struct) || (fieldValue.Kind() == reflect.Ptr && !fieldValue.IsNil()) {
+				if err := discover(fieldValue, fieldPath); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
 
-	entry := &PluginEntry{
-		Plugin:       plugin,
-		Config:       config,
-		PluginType:   pluginType,
-		InstanceName: instanceName,
-		started:      false,
-	}
-
-	pm.plugins[pluginKey] = entry
-	slog.Info("Plugin registered",
-		"plugin_type", pluginType,
-		"instance", instanceName,
-		"key", pluginKey)
-	return nil
+	return discover(reflect.ValueOf(config), "")
 }
 
-// RegisterWithInstance registers a plugin with a specific instance name
-func (pm *PluginManager[T]) RegisterWithInstance(plugin Plugin, config Config, instanceName string) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
-	pluginType := plugin.Name()
-	configType := GetConfigTypeName(config)
-
-	if pluginType != configType {
-		return fmt.Errorf("plugin type mismatch: %s != %s", pluginType, configType)
-	}
-
-	pluginKey := makePluginKey(pluginType, instanceName)
-
-	if _, exists := pm.plugins[pluginKey]; exists {
-		return fmt.Errorf("plugin instance %s already registered", pluginKey)
-	}
-
-	entry := &PluginEntry{
-		Plugin:       plugin,
-		Config:       config,
-		PluginType:   pluginType,
-		InstanceName: instanceName,
-		started:      false,
-	}
-
-	pm.plugins[pluginKey] = entry
-	slog.Info("Plugin registered with instance",
-		"plugin_type", pluginType,
-		"instance", instanceName,
-		"key", pluginKey)
-	return nil
-}
-
-// StartAll starts all registered plugins
-func (pm *PluginManager[T]) StartAll(ctx context.Context) error {
+func (pm *PluginManager[T]) Startup() error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -111,14 +152,16 @@ func (pm *PluginManager[T]) StartAll(ctx context.Context) error {
 		slog.Info("Plugin started",
 			"plugin_type", entry.PluginType,
 			"instance", entry.InstanceName,
-			"key", pluginKey)
+			"key", pluginKey,
+		)
 	}
+
+	slog.Debug("All plugins started", "count", len(pm.plugins))
 
 	return nil
 }
 
-// StopAll stops all registered plugins
-func (pm *PluginManager[T]) StopAll(ctx context.Context) error {
+func (pm *PluginManager[T]) Shutdown() error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -135,8 +178,11 @@ func (pm *PluginManager[T]) StopAll(ctx context.Context) error {
 		slog.Info("Plugin stopped",
 			"plugin_type", entry.PluginType,
 			"instance", entry.InstanceName,
-			"key", pluginKey)
+			"key", pluginKey,
+		)
 	}
+
+	slog.Debug("All plugins stopped", "count", len(pm.plugins))
 
 	return nil
 }
@@ -146,25 +192,29 @@ func (pm *PluginManager[T]) StopAll(ctx context.Context) error {
 // This method uses reflection to recursively iterate through configuration struct fields
 // and automatically reloads plugins when their corresponding configuration implements
 // the Config interface and has changed.
-func (pm *PluginManager[T]) HandleSmartConfigChange(ctx context.Context, oldConfig, newConfig *T) {
-	if oldConfig == nil || newConfig == nil {
-		return
+func (pm *PluginManager[T]) HandleSmartConfigChange(oldConfig, newConfig *T) error {
+	pm.mu.RLock()
+	if len(pm.plugins) == 0 {
+		pm.mu.RUnlock()
+		return fmt.Errorf("no plugins registered")
 	}
+	pm.mu.RUnlock()
 
-	// Get global plugin registry for plugin lookup
-	globalPlugins := Clone()
+	if oldConfig == nil || newConfig == nil {
+		return nil
+	}
 
 	// Use reflection to recursively iterate through configuration fields
 	oldValue := reflect.ValueOf(oldConfig)
 	newValue := reflect.ValueOf(newConfig)
 
 	// Start recursive traversal
-	pm.handleConfigChangeRecursive(ctx, globalPlugins, oldValue, newValue, "")
+	return pm.handleConfigChangeRecursive(oldValue, newValue, "")
 }
 
 // handleConfigChangeRecursive recursively traverses configuration structures to detect
 // plugin configuration changes at any nesting level with multi-instance support
-func (pm *PluginManager[T]) handleConfigChangeRecursive(ctx context.Context, globalPlugins map[string]*PluginEntry, oldValue, newValue reflect.Value, fieldPath string) {
+func (pm *PluginManager[T]) handleConfigChangeRecursive(oldValue, newValue reflect.Value, fieldPath string) error {
 	// Handle pointers
 	if oldValue.Kind() == reflect.Ptr {
 		oldValue = oldValue.Elem()
@@ -174,223 +224,119 @@ func (pm *PluginManager[T]) handleConfigChangeRecursive(ctx context.Context, glo
 	}
 
 	if oldValue.Kind() != reflect.Struct || newValue.Kind() != reflect.Struct {
-		return
+		return nil
 	}
 
 	oldType := oldValue.Type()
 
 	for i := range oldValue.NumField() {
 		fieldType := oldType.Field(i)
-		oldFieldValue := oldValue.Field(i)
-		newFieldValue := newValue.Field(i)
+		vOldField := oldValue.Field(i)
+		vNewField := newValue.Field(i)
 
 		// Skip unexported fields
-		if !oldFieldValue.CanInterface() || !newFieldValue.CanInterface() {
+		if !vOldField.CanInterface() || !vNewField.CanInterface() {
 			continue
 		}
 
 		// Build field path for logging
-		currentFieldPath := fieldType.Name
-		if fieldPath != "" {
-			currentFieldPath = fieldPath + "." + fieldType.Name
-		}
+		fieldPath = getFieldPath(fieldPath, fieldType.Name)
 
 		// Check if the field implements Config interface
-		if oldFieldValue.Kind() == reflect.Struct {
-			// Try to get the interface from the field
-			if oldFieldValue.CanAddr() {
-				oldConfigInterface := oldFieldValue.Addr().Interface()
-				newConfigInterface := newFieldValue.Addr().Interface()
+		if vOldField.Kind() == reflect.Struct {
+			// Try to get config interface from the field
+			iOldField := toInterface(vOldField)
+			iNewField := toInterface(vNewField)
 
-				// Check if it implements Config interface
-				if config, ok := oldConfigInterface.(Config); ok {
-					if !reflect.DeepEqual(oldConfigInterface, newConfigInterface) {
-						pluginType := GetConfigTypeName(config)
-						// Use field path as instance name for consistency with auto-discovery
-						instanceName := strings.ToLower(currentFieldPath)
-						pluginKey := makePluginKey(pluginType, instanceName)
-
-						slog.Info("Smart config change detected",
-							"field", currentFieldPath,
-							"plugin_type", pluginType,
-							"instance", instanceName,
-							"key", pluginKey)
-
-						// Try to reload from registered plugins first
-						pm.mu.RLock()
-						if entry, exists := pm.plugins[pluginKey]; !exists || !entry.started {
-							pm.mu.RUnlock()
-							// Try to reload from global registry
-							if entry, exists = globalPlugins[pluginKey]; exists {
-								go func(key string, plugin Plugin, newCfg any) {
-									if err := plugin.Reload(newCfg); err != nil {
-										slog.Error("Smart global plugin reload failed", "key", key, "error", err)
-										return
-									}
-									slog.Info("Smart global plugin reloaded", "key", key)
-								}(pluginKey, entry.Plugin, newConfigInterface)
-							}
-						} else {
-							pm.mu.RUnlock()
-							go func(key string, e *PluginEntry, newCfg any) {
-								if err := e.Plugin.Reload(newCfg); err != nil {
-									slog.Error("Smart plugin reload failed", "key", key, "error", err)
-									return
-								}
-								// Update last config
-								if newConfig, ok := newCfg.(Config); ok {
-									e.Config = newConfig
-								}
-								slog.Info("Smart plugin reloaded", "key", key)
-							}(pluginKey, entry, newConfigInterface)
-						}
-					} else {
-						// If not a plugin config, recursively check nested structures
-						pm.handleConfigChangeRecursive(ctx, globalPlugins, oldFieldValue, newFieldValue, currentFieldPath)
-					}
-				}
-			} else {
-				// Try direct interface check for non-addressable fields
-				oldConfigInterface := oldFieldValue.Interface()
-				newConfigInterface := newFieldValue.Interface()
-
-				if config, ok := oldConfigInterface.(Config); ok {
-					if !reflect.DeepEqual(oldConfigInterface, newConfigInterface) {
-						pluginType := GetConfigTypeName(config)
-						// Use field path as instance name for consistency with auto-discovery
-						instanceName := strings.ToLower(currentFieldPath)
-						pluginKey := makePluginKey(pluginType, instanceName)
-
-						slog.Info("Smart config change detected",
-							"field", currentFieldPath,
-							"plugin_type", pluginType,
-							"instance", instanceName,
-							"key", pluginKey)
-
-						// Try to reload from registered plugins first
-						pm.mu.RLock()
-						if entry, exists := pm.plugins[pluginKey]; exists && entry.started {
-							pm.mu.RUnlock()
-							go func(key string, e *PluginEntry, newCfg interface{}) {
-								if err := e.Plugin.Reload(newCfg); err != nil {
-									slog.Error("Smart plugin reload failed", "key", key, "error", err)
-									return
-								}
-								// Update last config
-								if newConfig, ok := newCfg.(Config); ok {
-									e.Config = newConfig
-								}
-								slog.Info("Smart plugin reloaded", "key", key)
-							}(pluginKey, entry, newConfigInterface)
-						} else {
-							pm.mu.RUnlock()
-							// Try to reload from global registry
-							if entry, exists := globalPlugins[pluginKey]; exists {
-								go func(key string, plugin Plugin, newCfg interface{}) {
-									if err := plugin.Reload(newCfg); err != nil {
-										slog.Error("Smart global plugin reload failed", "key", key, "error", err)
-										return
-									}
-									slog.Info("Smart global plugin reloaded", "key", key)
-								}(pluginKey, entry.Plugin, newConfigInterface)
-							}
-						}
-					} else {
-						// If not a plugin config, recursively check nested structures
-						pm.handleConfigChangeRecursive(ctx, globalPlugins, oldFieldValue, newFieldValue, currentFieldPath)
-					}
+			if iOldField != nil {
+				if config, ok := iOldField.(Config); ok && !reflect.DeepEqual(iOldField, iNewField) {
+					return pm.reloadPluginConfig(config, iNewField, fieldPath)
+				} else {
+					// If not a plugin config, recursively check nested structures
+					return pm.handleConfigChangeRecursive(vOldField, vNewField, fieldPath)
 				}
 			}
 		}
 	}
-}
 
-// Get returns a plugin by key (pluginType:instanceName)
-func (pm *PluginManager[T]) Get(key string) (Plugin, bool) {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-
-	if entry, exists := pm.plugins[key]; exists {
-		return entry.Plugin, true
-	}
-	return nil, false
-}
-
-// GetByTypeAndInstance returns a plugin by type and instance name
-func (pm *PluginManager[T]) GetByTypeAndInstance(pluginType, instanceName string) (Plugin, bool) {
-	key := makePluginKey(pluginType, instanceName)
-	return pm.Get(key)
-}
-
-// List returns all plugin keys (pluginType:instanceName)
-func (pm *PluginManager[T]) List() []string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-
-	keys := make([]string, 0, len(pm.plugins))
-	for key := range pm.plugins {
-		keys = append(keys, key)
-	}
-	return keys
-}
-
-// ListByType returns all plugin instances of a specific type
-func (pm *PluginManager[T]) ListByType(pluginType string) []string {
-	pm.mu.RLock()
-	defer pm.mu.RUnlock()
-
-	instances := make([]string, 0)
-	for key, entry := range pm.plugins {
-		if entry.PluginType == pluginType {
-			instances = append(instances, key)
-		}
-	}
-	return instances
-}
-
-// Unregister removes a plugin from the manager by key
-func (pm *PluginManager[T]) Unregister(key string) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
-
-	entry, exists := pm.plugins[key]
-	if !exists {
-		return fmt.Errorf("plugin %s not found", key)
-	}
-
-	// Stop the plugin if it's running
-	if entry.started {
-		if err := entry.Plugin.Stop(); err != nil {
-			slog.Error("Failed to stop plugin during unregister", "key", key, "error", err)
-		}
-	}
-
-	delete(pm.plugins, key)
-	slog.Info("Plugin unregistered", "key", key)
 	return nil
 }
 
-// UnregisterByTypeAndInstance removes a plugin by type and instance name
-func (pm *PluginManager[T]) UnregisterByTypeAndInstance(pluginType, instanceName string) error {
-	key := makePluginKey(pluginType, instanceName)
-	return pm.Unregister(key)
-}
+// reloadPluginConfig handles the plugin reload logic
+func (pm *PluginManager[T]) reloadPluginConfig(config Config, newConfig any, fieldPath string) error {
+	pluginType := getConfigType(config)
 
-// Shutdown stops all plugins and clears the manager
-func (pm *PluginManager[T]) Shutdown(ctx context.Context) error {
-	pm.mu.Lock()
-	defer pm.mu.Unlock()
+	// Use field path as instance name for consistency with auto-discovery
+	instanceName := strings.ToLower(fieldPath)
+	pluginKey := getPluginKey(pluginType, instanceName)
 
-	for name, entry := range pm.plugins {
-		if entry.started {
-			if err := entry.Plugin.Stop(); err != nil {
-				slog.Error("Failed to stop plugin during shutdown", "name", name, "error", err)
-			}
+	slog.Info("Smart config change detected",
+		"field", fieldPath,
+		"plugin_type", pluginType,
+		"instance", instanceName,
+		"key", pluginKey,
+	)
+
+	// Try to reload from registered plugins first
+	pm.mu.RLock()
+	entry, exists := pm.plugins[pluginKey]
+	pm.mu.RUnlock()
+
+	if exists && entry.started {
+		// Reload registered plugin
+		if err := entry.Plugin.Reload(newConfig); err != nil {
+			return fmt.Errorf("smart plugin reload failed, key=%s, err=%w", pluginKey, err)
+		}
+
+		// Update config for registered plugins
+		if newCfg, ok := newConfig.(Config); ok {
+			entry.Config = newCfg
 		}
 	}
 
-	// Clear all plugins
-	pm.plugins = make(map[string]*PluginEntry)
-	slog.Info("Plugin manager shutdown completed")
+	return nil
+}
+
+// Clone returns information about all registered plugins in the global registry
+func (pm *PluginManager[T]) Clone() map[string]*PluginEntry {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	return maps.Clone(pm.plugins)
+}
+
+// copyConfig copies configuration values from src to dst using reflection
+func copyConfig(src, dst Config) error {
+	srcValue := reflect.ValueOf(src)
+	dstValue := reflect.ValueOf(dst)
+
+	// Handle pointers
+	if srcValue.Kind() == reflect.Ptr {
+		srcValue = srcValue.Elem()
+	}
+	if dstValue.Kind() == reflect.Ptr {
+		dstValue = dstValue.Elem()
+	}
+
+	if !srcValue.IsValid() || !dstValue.IsValid() {
+		return fmt.Errorf("invalid source or destination config")
+	}
+
+	if srcValue.Type() != dstValue.Type() {
+		return fmt.Errorf("config types do not match: %v vs %v", srcValue.Type(), dstValue.Type())
+	}
+
+	// Copy field values
+	for i := 0; i < srcValue.NumField(); i++ {
+		srcField := srcValue.Field(i)
+		dstField := dstValue.Field(i)
+
+		if !dstField.CanSet() {
+			continue
+		}
+
+		dstField.Set(srcField)
+	}
+
 	return nil
 }

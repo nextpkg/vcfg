@@ -1,82 +1,70 @@
 package plugins
 
-import (
-	"reflect"
-	"strings"
+import "sync"
+
+// 插件定义
+type (
+	Plugin interface {
+		Start(config any) error
+		Reload(config any) error
+		Stop() error
+	}
+	Config interface {
+		baseConfigEmbedded() *BaseConfig
+	}
 )
 
 type (
-	// Plugin defines the generic plugin interface
-	// This is a type-safe plugin interface that provides hot reload capability with minimal boilerplate
-	Plugin interface {
-		// Name returns the plugin name for identification
-		Name() string
-
-		// Start initializes the plugin with configuration
-		// This method is called when the plugin is first loaded
-		Start(config any) error
-
-		// Reload is called when plugin configuration changes
-		// The plugin should gracefully update its behavior based on the new configuration
-		Reload(config any) error
-
-		// Stop gracefully shuts down the plugin
-		Stop() error
-	}
-
-	// Config defines the generic plugin configuration interface
-	// Note: Instance names are derived from config field paths, not from this method
-	Config interface {
-		// Name returns the config name
-		Name() string
-		// SetName sets the config name
-		SetName(string)
-	}
-
-	// BaseConfig provides a default implementation for plugin configuration
-	// Users can embed this struct to reduce boilerplate code
 	BaseConfig struct {
-		name string
+		Type string `json:"type,omitempty" yaml:"type,omitempty" koanf:"type"`
+	}
+
+	PluginPtr[T any] interface {
+		Plugin
+		*T
+	}
+	ConfigPtr[T any] interface {
+		Config
+		*T
+	}
+
+	RegisterOptions struct {
+		InstanceName string // Optional: explicit instance name
+		ConfigPath   string // Optional: explicit config path
+		AutoDiscover bool   // Whether to enable auto-discovery for this type
 	}
 )
 
-// Name returns the config name
-func (bc *BaseConfig) Name() string {
-	return bc.name
+func (bc *BaseConfig) baseConfigEmbedded() *BaseConfig {
+	return bc
 }
 
-// SetName sets the config name (used internally during registration)
-func (bc *BaseConfig) SetName(name string) {
-	bc.name = name
-}
-
-// GetConfigTypeName extracts the config type name, preferring Config.Name() method over reflection
-func GetConfigTypeName(config Config) string {
-	// First try to use the Config interface Name() method
-	if name := config.Name(); name != "" {
-		return name
+type (
+	// globalPluginTypeRegistry 全局插件注册表
+	globalPluginTypeRegistry struct {
+		mu          sync.RWMutex
+		pluginTypes map[string]*PluginTypeEntry // key: pluginType
 	}
 
-	// Fall back to reflection-based naming
-	return getTypeNameByReflection(config)
-}
-
-// getTypeNameByReflection derives type name from struct name using reflection
-func getTypeNameByReflection(v any) string {
-	t := reflect.TypeOf(v)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
+	PluginTypeEntry struct {
+		PluginFactory PluginFactory
+		ConfigFactory ConfigFactory
+		PluginType    string
+		AutoDiscover  bool
 	}
 
-	name := strings.ToLower(t.Name())
+	PluginFactory func() Plugin
+	ConfigFactory func() Config
+)
 
-	// Remove common suffixes to derive clean type names
-	suffixes := []string{"plugin", "config", "impl", "service", "cfg", "configuration"}
-	for _, suffix := range suffixes {
-		if strings.HasSuffix(name, suffix) {
-			return strings.TrimSuffix(name, suffix)
-		}
+type (
+	// PluginEntry 插件注册表条目
+	PluginEntry struct {
+		Plugin       Plugin
+		Config       Config
+		PluginType   string // 插件类型名称
+		InstanceName string // 实例名称
+		ConfigPath   string // 配置路径
+		started      bool   // 插件启动状态
 	}
-
-	return name
-}
+)
