@@ -15,9 +15,10 @@ import (
 
 // Builder 配置管理器构建器
 type Builder[T any] struct {
-	sources     []any
-	plugins     []plugins.PluginEntry
-	enableWatch bool
+	sources      []any
+	plugins      []plugins.PluginEntry
+	enableWatch  bool
+	enablePlugin bool
 }
 
 // NewBuilder 创建新的构建器
@@ -67,6 +68,11 @@ func (b *Builder[T]) WithWatch() *Builder[T] {
 	return b
 }
 
+func (b *Builder[T]) WithPlugin() *Builder[T] {
+	b.enablePlugin = true
+	return b
+}
+
 // Build 构建配置管理器
 func (b *Builder[T]) Build() (*ConfigManager[T], error) {
 	if len(b.sources) == 0 {
@@ -83,7 +89,18 @@ func (b *Builder[T]) Build() (*ConfigManager[T], error) {
 	}
 	cm.cfg.Store(cfg)
 
-	// 全局插件已在newManager中自动注册
+	// 启用插件
+	if b.enablePlugin {
+		err = cm.pluginManager.Initialize(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize plugins: %w", err)
+		}
+
+		err = cm.pluginManager.Startup()
+		if err != nil {
+			return nil, fmt.Errorf("failed to startup plugins: %w", err)
+		}
+	}
 
 	// 启用监听
 	if b.enableWatch {
@@ -100,34 +117,4 @@ func (b *Builder[T]) MustBuild() *ConfigManager[T] {
 		panic(err)
 	}
 	return cm
-}
-
-// 便捷方法
-
-// New 创建简单的配置管理器（仅文件源）
-func New[T any](filePaths ...string) *ConfigManager[T] {
-	builder := NewBuilder[T]()
-	for _, path := range filePaths {
-		builder.AddFile(path)
-	}
-	return builder.MustBuild()
-}
-
-// NewWithWatch 创建带监听的配置管理器
-func NewWithWatch[T any](filePaths ...string) *ConfigManager[T] {
-	builder := NewBuilder[T]()
-	for _, path := range filePaths {
-		builder.AddFile(path)
-	}
-	return builder.WithWatch().MustBuild()
-}
-
-// NewWithEnv 创建带环境变量的配置管理器
-func NewWithEnv[T any](envPrefix string, filePaths ...string) *ConfigManager[T] {
-	builder := NewBuilder[T]()
-	for _, path := range filePaths {
-		builder.AddFile(path)
-	}
-	builder.AddEnv(envPrefix)
-	return builder.MustBuild()
 }

@@ -3,7 +3,6 @@ package plugins
 import (
 	"fmt"
 	"log/slog"
-	"maps"
 	"reflect"
 	"strings"
 	"sync"
@@ -302,41 +301,18 @@ func (pm *PluginManager[T]) Clone() map[string]*PluginEntry {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
-	return maps.Clone(pm.plugins)
-}
-
-// copyConfig copies configuration values from src to dst using reflection
-func copyConfig(src, dst Config) error {
-	srcValue := reflect.ValueOf(src)
-	dstValue := reflect.ValueOf(dst)
-
-	// Handle pointers
-	if srcValue.Kind() == reflect.Ptr {
-		srcValue = srcValue.Elem()
-	}
-	if dstValue.Kind() == reflect.Ptr {
-		dstValue = dstValue.Elem()
-	}
-
-	if !srcValue.IsValid() || !dstValue.IsValid() {
-		return fmt.Errorf("invalid source or destination config")
-	}
-
-	if srcValue.Type() != dstValue.Type() {
-		return fmt.Errorf("config types do not match: %v vs %v", srcValue.Type(), dstValue.Type())
-	}
-
-	// Copy field values
-	for i := 0; i < srcValue.NumField(); i++ {
-		srcField := srcValue.Field(i)
-		dstField := dstValue.Field(i)
-
-		if !dstField.CanSet() {
-			continue
+	// Create a deep copy of the plugins map
+	cloned := make(map[string]*PluginEntry, len(pm.plugins))
+	for key, entry := range pm.plugins {
+		// Create a copy of the PluginEntry
+		cloned[key] = &PluginEntry{
+			Plugin:       entry.Plugin,
+			Config:       entry.Config,
+			PluginType:   entry.PluginType,
+			InstanceName: entry.InstanceName,
+			ConfigPath:   entry.ConfigPath,
+			started:      entry.started,
 		}
-
-		dstField.Set(srcField)
 	}
-
-	return nil
+	return cloned
 }

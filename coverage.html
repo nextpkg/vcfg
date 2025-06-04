@@ -1,0 +1,686 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>plugins: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/nextpkg/vcfg/plugins/interfaces.go (100.0%)</option>
+				
+				<option value="file1">github.com/nextpkg/vcfg/plugins/manager.go (0.0%)</option>
+				
+				<option value="file2">github.com/nextpkg/vcfg/plugins/registry.go (0.0%)</option>
+				
+				<option value="file3">github.com/nextpkg/vcfg/plugins/utilts.go (92.5%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package plugins
+
+import "sync"
+
+// 插件定义
+type (
+        Plugin interface {
+                Start(config any) error
+                Reload(config any) error
+                Stop() error
+        }
+        Config interface {
+                baseConfigEmbedded() *BaseConfig
+        }
+)
+
+type (
+        BaseConfig struct {
+                Type string `json:"type,omitempty" yaml:"type,omitempty" koanf:"type"`
+        }
+
+        PluginPtr[T any] interface {
+                Plugin
+                *T
+        }
+        ConfigPtr[T any] interface {
+                Config
+                *T
+        }
+
+        RegisterOptions struct {
+                InstanceName string // Optional: explicit instance name
+                ConfigPath   string // Optional: explicit config path
+                AutoDiscover bool   // Whether to enable auto-discovery for this type
+        }
+)
+
+func (bc *BaseConfig) baseConfigEmbedded() *BaseConfig <span class="cov8" title="1">{
+        return bc
+}</span>
+
+type (
+        // globalPluginTypeRegistry 全局插件注册表
+        globalPluginTypeRegistry struct {
+                mu          sync.RWMutex
+                pluginTypes map[string]*PluginTypeEntry // key: pluginType
+        }
+
+        PluginTypeEntry struct {
+                PluginFactory PluginFactory
+                ConfigFactory ConfigFactory
+                PluginType    string
+                AutoDiscover  bool
+        }
+
+        PluginFactory func() Plugin
+        ConfigFactory func() Config
+)
+
+type (
+        // PluginEntry 插件注册表条目
+        PluginEntry struct {
+                Plugin       Plugin
+                Config       Config
+                PluginType   string // 插件类型名称
+                InstanceName string // 实例名称
+                ConfigPath   string // 配置路径
+                started      bool   // 插件启动状态
+        }
+)
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package plugins
+
+import (
+        "fmt"
+        "log/slog"
+        "maps"
+        "reflect"
+        "strings"
+        "sync"
+)
+
+type PluginManager[T any] struct {
+        mu      sync.RWMutex
+        plugins map[string]*PluginEntry // // key: pluginType:instanceName
+}
+
+func NewPluginManager[T any]() *PluginManager[T] <span class="cov0" title="0">{
+        return &amp;PluginManager[T]{
+                plugins: make(map[string]*PluginEntry),
+        }
+}</span>
+
+func (pm *PluginManager[T]) Initialize(config *T) error <span class="cov0" title="0">{
+        pm.mu.Lock()
+        defer pm.mu.Unlock()
+
+        pluginTypes := clonePluginTypes()
+        if len(pluginTypes) == 0 </span><span class="cov0" title="0">{
+                slog.Debug("No plugin types registered for auto-discovery")
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">var discover func(reflect.Value, string) error
+        discover = func(configValue reflect.Value, currentPath string) error </span><span class="cov0" title="0">{
+                // Handle pointers
+                if configValue.Kind() == reflect.Ptr </span><span class="cov0" title="0">{
+                        configValue = configValue.Elem()
+                }</span>
+
+                <span class="cov0" title="0">if !configValue.IsValid() || configValue.Kind() != reflect.Struct </span><span class="cov0" title="0">{
+                        return fmt.Errorf("invalid config value")
+                }</span>
+
+                <span class="cov0" title="0">configType := configValue.Type()
+                for i := range configValue.NumField() </span><span class="cov0" title="0">{
+                        fieldType := configType.Field(i)
+                        fieldValue := configValue.Field(i)
+
+                        // Skip unexported fields
+                        if !fieldValue.CanInterface() </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+
+                        // Build current field path
+                        <span class="cov0" title="0">fieldPath := getFieldPath(currentPath, fieldType.Name)
+
+                        // Check for pointer type configs and provide helpful error message
+                        if fieldValue.Kind() == reflect.Ptr </span><span class="cov0" title="0">{
+                                // Check if pointer points to a struct that implements Config interface
+                                if fieldValue.Type().Elem().Kind() == reflect.Struct </span><span class="cov0" title="0">{
+                                        // Create a zero value instance to check if it implements Config interface
+                                        zeroValue := reflect.New(fieldValue.Type().Elem()).Interface()
+                                        if _, ok := zeroValue.(Config); ok </span><span class="cov0" title="0">{
+                                                return fmt.Errorf("配置字段 '%s' 使用了指针类型 '%s'，请改为值类型 '%s'。指针类型配置可能导致意外的共享状态和内存问题",
+                                                        fieldPath, fieldValue.Type(), fieldValue.Type().Elem())
+                                        }</span>
+                                }
+                        }
+
+                        // Check if this field implements Config interface
+                        <span class="cov0" title="0">if fieldValue.Kind() == reflect.Struct &amp;&amp; fieldValue.CanAddr() </span><span class="cov0" title="0">{
+                                fieldInterface := fieldValue.Addr().Interface()
+                                if oldConfig, ok := fieldInterface.(Config); ok </span><span class="cov0" title="0">{
+                                        pluginType := getConfigType(oldConfig)
+
+                                        slog.Debug("Found config field", "path", fieldPath, "type", pluginType)
+
+                                        // Check if we have a registered plugin type for this config
+                                        entry, exists := pluginTypes[pluginType]
+                                        if !exists </span><span class="cov0" title="0">{
+                                                return fmt.Errorf("config field does not have a registered plugin type, type=%s", pluginType)
+                                        }</span>
+
+                                        // Create newPlugin and config instances
+                                        <span class="cov0" title="0">newPlugin := entry.PluginFactory()
+                                        newConfig := entry.ConfigFactory()
+
+                                        // Copy configuration values from oldConfig to newConfig
+                                        if err := copyConfig(oldConfig, newConfig); err != nil </span><span class="cov0" title="0">{
+                                                return fmt.Errorf("failed to copy config for %s: %w", fieldPath, err)
+                                        }</span>
+
+                                        // Use field path as instance name to support multiple instances
+                                        // This allows the same plugin type to have different instances based on config location
+                                        <span class="cov0" title="0">instanceName := strings.ToLower(fieldPath)
+
+                                        pluginKey := getPluginKey(pluginType, instanceName)
+
+                                        // Check if plugin instance already exists
+                                        if _, exists := pm.plugins[pluginKey]; exists </span><span class="cov0" title="0">{
+                                                return fmt.Errorf("plugin instance %s already registered", pluginKey)
+                                        }</span>
+
+                                        <span class="cov0" title="0">pm.plugins[pluginKey] = &amp;PluginEntry{
+                                                Plugin:       newPlugin,
+                                                Config:       newConfig,
+                                                PluginType:   pluginType,
+                                                InstanceName: instanceName,
+                                                ConfigPath:   fieldPath,
+                                                started:      false,
+                                        }
+
+                                        slog.Debug("Plugin registered",
+                                                "type", entry.PluginType,
+                                                "instance", instanceName,
+                                                "key", pluginKey,
+                                                "config_path", fieldPath,
+                                        )
+
+                                        // Continue to process other fields instead of returning
+                                        continue</span>
+                                }
+                        }
+
+                        // Recursively process nested structures
+                        <span class="cov0" title="0">if (fieldValue.Kind() == reflect.Struct) || (fieldValue.Kind() == reflect.Ptr &amp;&amp; !fieldValue.IsNil()) </span><span class="cov0" title="0">{
+                                if err := discover(fieldValue, fieldPath); err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                        }
+                }
+                <span class="cov0" title="0">return nil</span>
+        }
+
+        <span class="cov0" title="0">return discover(reflect.ValueOf(config), "")</span>
+}
+
+func (pm *PluginManager[T]) Startup() error <span class="cov0" title="0">{
+        pm.mu.Lock()
+        defer pm.mu.Unlock()
+
+        for pluginKey, entry := range pm.plugins </span><span class="cov0" title="0">{
+                if entry.started </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">if err := entry.Plugin.Start(entry.Config); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to start plugin %s: %w", pluginKey, err)
+                }</span>
+
+                <span class="cov0" title="0">entry.started = true
+                slog.Info("Plugin started",
+                        "plugin_type", entry.PluginType,
+                        "instance", entry.InstanceName,
+                        "key", pluginKey,
+                )</span>
+        }
+
+        <span class="cov0" title="0">slog.Debug("All plugins started", "count", len(pm.plugins))
+
+        return nil</span>
+}
+
+func (pm *PluginManager[T]) Shutdown() error <span class="cov0" title="0">{
+        pm.mu.Lock()
+        defer pm.mu.Unlock()
+
+        for pluginKey, entry := range pm.plugins </span><span class="cov0" title="0">{
+                if !entry.started </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">if err := entry.Plugin.Stop(); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to stop plugin %s: %w", pluginKey, err)
+                }</span>
+
+                <span class="cov0" title="0">entry.started = false
+                slog.Info("Plugin stopped",
+                        "plugin_type", entry.PluginType,
+                        "instance", entry.InstanceName,
+                        "key", pluginKey,
+                )</span>
+        }
+
+        <span class="cov0" title="0">slog.Debug("All plugins stopped", "count", len(pm.plugins))
+
+        return nil</span>
+}
+
+// HandleSmartConfigChange intelligently handles configuration changes by automatically
+// detecting which plugin configurations have changed and reloading only those plugins.
+// This method uses reflection to recursively iterate through configuration struct fields
+// and automatically reloads plugins when their corresponding configuration implements
+// the Config interface and has changed.
+func (pm *PluginManager[T]) HandleSmartConfigChange(oldConfig, newConfig *T) error <span class="cov0" title="0">{
+        pm.mu.RLock()
+        if len(pm.plugins) == 0 </span><span class="cov0" title="0">{
+                pm.mu.RUnlock()
+                return fmt.Errorf("no plugins registered")
+        }</span>
+        <span class="cov0" title="0">pm.mu.RUnlock()
+
+        if oldConfig == nil || newConfig == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        // Use reflection to recursively iterate through configuration fields
+        <span class="cov0" title="0">oldValue := reflect.ValueOf(oldConfig)
+        newValue := reflect.ValueOf(newConfig)
+
+        // Start recursive traversal
+        return pm.handleConfigChangeRecursive(oldValue, newValue, "")</span>
+}
+
+// handleConfigChangeRecursive recursively traverses configuration structures to detect
+// plugin configuration changes at any nesting level with multi-instance support
+func (pm *PluginManager[T]) handleConfigChangeRecursive(oldValue, newValue reflect.Value, fieldPath string) error <span class="cov0" title="0">{
+        // Handle pointers
+        if oldValue.Kind() == reflect.Ptr </span><span class="cov0" title="0">{
+                oldValue = oldValue.Elem()
+        }</span>
+        <span class="cov0" title="0">if newValue.Kind() == reflect.Ptr </span><span class="cov0" title="0">{
+                newValue = newValue.Elem()
+        }</span>
+
+        <span class="cov0" title="0">if oldValue.Kind() != reflect.Struct || newValue.Kind() != reflect.Struct </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">oldType := oldValue.Type()
+
+        for i := range oldValue.NumField() </span><span class="cov0" title="0">{
+                fieldType := oldType.Field(i)
+                vOldField := oldValue.Field(i)
+                vNewField := newValue.Field(i)
+
+                // Skip unexported fields
+                if !vOldField.CanInterface() || !vNewField.CanInterface() </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                // Build field path for logging
+                <span class="cov0" title="0">fieldPath = getFieldPath(fieldPath, fieldType.Name)
+
+                // Check if the field implements Config interface
+                if vOldField.Kind() == reflect.Struct </span><span class="cov0" title="0">{
+                        // Try to get config interface from the field
+                        iOldField := toInterface(vOldField)
+                        iNewField := toInterface(vNewField)
+
+                        if iOldField != nil </span><span class="cov0" title="0">{
+                                if config, ok := iOldField.(Config); ok &amp;&amp; !reflect.DeepEqual(iOldField, iNewField) </span><span class="cov0" title="0">{
+                                        return pm.reloadPluginConfig(config, iNewField, fieldPath)
+                                }</span> else<span class="cov0" title="0"> {
+                                        // If not a plugin config, recursively check nested structures
+                                        return pm.handleConfigChangeRecursive(vOldField, vNewField, fieldPath)
+                                }</span>
+                        }
+                }
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// reloadPluginConfig handles the plugin reload logic
+func (pm *PluginManager[T]) reloadPluginConfig(config Config, newConfig any, fieldPath string) error <span class="cov0" title="0">{
+        pluginType := getConfigType(config)
+
+        // Use field path as instance name for consistency with auto-discovery
+        instanceName := strings.ToLower(fieldPath)
+        pluginKey := getPluginKey(pluginType, instanceName)
+
+        slog.Info("Smart config change detected",
+                "field", fieldPath,
+                "plugin_type", pluginType,
+                "instance", instanceName,
+                "key", pluginKey,
+        )
+
+        // Try to reload from registered plugins first
+        pm.mu.RLock()
+        entry, exists := pm.plugins[pluginKey]
+        pm.mu.RUnlock()
+
+        if exists &amp;&amp; entry.started </span><span class="cov0" title="0">{
+                // Reload registered plugin
+                if err := entry.Plugin.Reload(newConfig); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("smart plugin reload failed, key=%s, err=%w", pluginKey, err)
+                }</span>
+
+                // Update config for registered plugins
+                <span class="cov0" title="0">if newCfg, ok := newConfig.(Config); ok </span><span class="cov0" title="0">{
+                        entry.Config = newCfg
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// Clone returns information about all registered plugins in the global registry
+func (pm *PluginManager[T]) Clone() map[string]*PluginEntry <span class="cov0" title="0">{
+        pm.mu.RLock()
+        defer pm.mu.RUnlock()
+
+        return maps.Clone(pm.plugins)
+}</span>
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package plugins
+
+import (
+        "fmt"
+        "log/slog"
+        "maps"
+        "reflect"
+        "sync"
+)
+
+var (
+        globalRegistry     *globalPluginTypeRegistry
+        globalRegistryOnce sync.Once
+)
+
+// getGlobalPluginRegistry 返回单例全局插件注册表实例
+func getGlobalPluginRegistry() *globalPluginTypeRegistry <span class="cov0" title="0">{
+        globalRegistryOnce.Do(func() </span><span class="cov0" title="0">{
+                globalRegistry = &amp;globalPluginTypeRegistry{
+                        pluginTypes: make(map[string]*PluginTypeEntry),
+                }
+        }</span>)
+        <span class="cov0" title="0">return globalRegistry</span>
+}
+
+func RegisterPluginType[P PluginPtr[PT], C ConfigPtr[CT], PT any, CT any](pluginType string, p P, c C, opts ...RegisterOptions) <span class="cov0" title="0">{
+        registry := getGlobalPluginRegistry()
+        registry.mu.Lock()
+        defer registry.mu.Unlock()
+
+        if pluginType == "" </span><span class="cov0" title="0">{
+                pluginType = getConfigType(c)
+        }</span>
+
+        <span class="cov0" title="0">_, exists := registry.pluginTypes[pluginType]
+        if exists </span><span class="cov0" title="0">{
+                panic(fmt.Sprintf("plugin type is registerd, type=%s", pluginType))</span>
+        }
+
+        // Create simplified type-safe factory functions using generics
+        // Since P and C are constrained to be pointer types, we can simplify the logic
+        <span class="cov0" title="0">pluginFactory := func() Plugin </span><span class="cov0" title="0">{
+                return reflect.New(reflect.TypeOf(*p)).Interface().(Plugin)
+        }</span>
+
+        <span class="cov0" title="0">configFactory := func() Config </span><span class="cov0" title="0">{
+                return reflect.New(reflect.TypeOf(*c)).Interface().(Config)
+        }</span>
+
+        // Determine auto-discovery setting
+        <span class="cov0" title="0">autoDiscover := true
+        if len(opts) &gt; 0 </span><span class="cov0" title="0">{
+                autoDiscover = opts[0].AutoDiscover
+        }</span>
+
+        <span class="cov0" title="0">registry.pluginTypes[pluginType] = &amp;PluginTypeEntry{
+                PluginType:    pluginType,
+                PluginFactory: pluginFactory,
+                ConfigFactory: configFactory,
+                AutoDiscover:  autoDiscover,
+        }
+
+        slog.Info("Plugin type registered", "PluginType", pluginType, "auto_discover", autoDiscover)</span>
+}
+
+// ListPluginTypes returns a list of all registered plugin type names
+func ListPluginTypes() []string <span class="cov0" title="0">{
+        registry := getGlobalPluginRegistry()
+        registry.mu.RLock()
+        defer registry.mu.RUnlock()
+
+        types := make([]string, 0, len(registry.pluginTypes))
+        for pluginType := range registry.pluginTypes </span><span class="cov0" title="0">{
+                types = append(types, pluginType)
+        }</span>
+        <span class="cov0" title="0">return types</span>
+}
+
+// UnregisterPluginType removes a plugin type from the registry
+func UnregisterPluginType(pluginType string) <span class="cov0" title="0">{
+        registry := getGlobalPluginRegistry()
+        registry.mu.Lock()
+        defer registry.mu.Unlock()
+
+        delete(registry.pluginTypes, pluginType)
+        slog.Info("Plugin type unregistered", "type", pluginType)
+}</span>
+
+func clonePluginTypes() map[string]*PluginTypeEntry <span class="cov0" title="0">{
+        registry := getGlobalPluginRegistry()
+        registry.mu.RLock()
+        defer registry.mu.RUnlock()
+
+        return maps.Clone(registry.pluginTypes)
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package plugins
+
+import (
+        "fmt"
+        "reflect"
+        "strings"
+)
+
+// key generates a composite key for plugin registration
+// Format: pluginType:instanceName
+func getPluginKey(pluginType, instanceName string) string <span class="cov8" title="1">{
+        if instanceName == "" </span><span class="cov8" title="1">{
+                return pluginType
+        }</span>
+
+        <span class="cov8" title="1">return strings.Join([]string{pluginType, instanceName}, ":")</span>
+}
+
+// getFieldPath returns the instance ID for a given field path
+func getFieldPath(currentPath, fieldName string) string <span class="cov8" title="1">{
+        // Build current field path
+        if currentPath != "" </span><span class="cov8" title="1">{
+                return strings.Join([]string{currentPath, fieldName}, ".")
+        }</span>
+
+        <span class="cov8" title="1">return fieldName</span>
+}
+
+func getConfigType[T Config](v T) string <span class="cov8" title="1">{
+        // Get plugin type from config
+        var pluginType string
+        if baseConfig := v.baseConfigEmbedded(); baseConfig != nil </span><span class="cov8" title="1">{
+                pluginType = baseConfig.Type
+        }</span>
+
+        <span class="cov8" title="1">if pluginType == "" </span><span class="cov8" title="1">{
+                t := reflect.TypeOf(v)
+                if t.Kind() == reflect.Ptr </span><span class="cov8" title="1">{
+                        t = t.Elem()
+                }</span>
+
+                <span class="cov8" title="1">name := strings.ToLower(t.Name())
+
+                // Remove common suffixes to derive clean type names
+                suffixes := []string{"plugin", "config", "impl", "service", "cfg", "configuration"}
+                for _, suffix := range suffixes </span><span class="cov8" title="1">{
+                        if strings.HasSuffix(name, suffix) </span><span class="cov8" title="1">{
+                                return strings.TrimSuffix(name, suffix)
+                        }</span>
+                }
+
+                <span class="cov0" title="0">return name</span>
+        }
+
+        <span class="cov8" title="1">return pluginType</span>
+}
+
+// toInterface extracts config interface from field values
+func toInterface(fieldValue reflect.Value) any <span class="cov8" title="1">{
+        if fieldValue.CanAddr() </span><span class="cov0" title="0">{
+                return fieldValue.Addr().Interface()
+        }</span>
+        <span class="cov8" title="1">return fieldValue.Interface()</span>
+}
+
+// copyConfig copies configuration values from src to dst using reflection
+func copyConfig[T Config](src, dst T) error <span class="cov8" title="1">{
+        srcValue := reflect.ValueOf(src)
+        dstValue := reflect.ValueOf(dst)
+
+        // Handle pointers
+        if srcValue.Kind() == reflect.Ptr </span><span class="cov8" title="1">{
+                srcValue = srcValue.Elem()
+        }</span>
+        <span class="cov8" title="1">if dstValue.Kind() == reflect.Ptr </span><span class="cov8" title="1">{
+                dstValue = dstValue.Elem()
+        }</span>
+
+        <span class="cov8" title="1">if !srcValue.IsValid() || !dstValue.IsValid() </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid source or destination config")
+        }</span>
+
+        <span class="cov8" title="1">if srcValue.Type() != dstValue.Type() </span><span class="cov8" title="1">{
+                return fmt.Errorf("config types do not match: %v vs %v", srcValue.Type(), dstValue.Type())
+        }</span>
+
+        // Copy field values
+        <span class="cov8" title="1">for i := range srcValue.NumField() </span><span class="cov8" title="1">{
+                srcField := srcValue.Field(i)
+                dstField := dstValue.Field(i)
+
+                if !dstField.CanSet() </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">dstField.Set(srcField)</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

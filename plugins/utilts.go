@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 )
@@ -18,7 +19,7 @@ func getPluginKey(pluginType, instanceName string) string {
 // getFieldPath returns the instance ID for a given field path
 func getFieldPath(currentPath, fieldName string) string {
 	// Build current field path
-	if currentPath != "" {
+	if currentPath != "" && fieldName != "" {
 		return strings.Join([]string{currentPath, fieldName}, ".")
 	}
 
@@ -60,4 +61,40 @@ func toInterface(fieldValue reflect.Value) any {
 		return fieldValue.Addr().Interface()
 	}
 	return fieldValue.Interface()
+}
+
+// copyConfig copies configuration values from src to dst using reflection
+func copyConfig[T Config](src, dst T) error {
+	srcValue := reflect.ValueOf(src)
+	dstValue := reflect.ValueOf(dst)
+
+	// Handle pointers
+	if srcValue.Kind() == reflect.Ptr {
+		srcValue = srcValue.Elem()
+	}
+	if dstValue.Kind() == reflect.Ptr {
+		dstValue = dstValue.Elem()
+	}
+
+	if !srcValue.IsValid() || !dstValue.IsValid() {
+		return fmt.Errorf("invalid source or destination config")
+	}
+
+	if srcValue.Type() != dstValue.Type() {
+		return fmt.Errorf("config types do not match: %v vs %v", srcValue.Type(), dstValue.Type())
+	}
+
+	// Copy field values
+	for i := range srcValue.NumField() {
+		srcField := srcValue.Field(i)
+		dstField := dstValue.Field(i)
+
+		if !dstField.CanSet() {
+			continue
+		}
+
+		dstField.Set(srcField)
+	}
+
+	return nil
 }
