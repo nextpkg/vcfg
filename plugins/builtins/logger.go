@@ -1,6 +1,7 @@
 package builtins
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -55,9 +56,9 @@ func setGlobalLogger(logger *slog.Logger) {
 	slog.SetDefault(logger)
 }
 
-// Start implements plugins.Plugin interface
-// Start initializes the logger plugin with the provided configuration
-func (p *LoggerPlugin) Start(config any) error {
+// Startup implements plugins.Plugin interface
+// Startup initializes the logger plugin with the provided configuration
+func (p *LoggerPlugin) Startup(ctx context.Context, config any) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -114,21 +115,21 @@ func (p *LoggerPlugin) Start(config any) error {
 
 // Reload implements plugins.Plugin interface
 // Reload reloads the logger plugin with new configuration
-func (p *LoggerPlugin) Reload(config any) error {
+func (p *LoggerPlugin) Reload(ctx context.Context, config any) error {
 	p.logger.Info("Reloading logger plugin")
 
-	// Stop current logger
-	if err := p.Stop(); err != nil {
+	// Stop current logger first
+	if err := p.Shutdown(ctx); err != nil {
 		return fmt.Errorf("failed to stop logger during reload: %w", err)
 	}
 
 	// Start with new config
-	return p.Start(config)
+	return p.Startup(ctx, config)
 }
 
-// Stop implements plugins.Plugin interface
-// Stop gracefully shuts down the logger plugin
-func (p *LoggerPlugin) Stop() error {
+// Shutdown implements plugins.Plugin interface
+// Shutdown gracefully shuts down the logger plugin
+func (p *LoggerPlugin) Shutdown(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

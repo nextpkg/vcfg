@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
@@ -30,7 +31,7 @@ func main() {
 	config := cm.Get()
 	fmt.Printf("Logger config: %#v\n", config.Logger)
 
-	cm.MustEnableAndStartPlugin()
+	cm.MustEnableAndStartPluginWithContext(context.Background())
 
 	// Get the logger instance
 	logger := builtins.GetLogger()
@@ -66,5 +67,5 @@ func main() {
 	logger.Info("Application shutting down gracefully")
 
 	// Stop the configuration manager (this will stop all plugins)
-	cm.Close()
+	cm.CloseWithContext(context.Background())
 }

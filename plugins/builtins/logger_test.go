@@ -1,6 +1,7 @@
 package builtins
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -71,14 +72,14 @@ func TestLoggerPlugin_Start(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			plugin := &LoggerPlugin{}
-			err := plugin.Start(tt.config)
+			err := plugin.Startup(context.Background(), tt.config)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, plugin.logger)
 				// Clean up
-				_ = plugin.Stop()
+				_ = plugin.Shutdown(context.Background())
 			}
 		})
 	}
@@ -96,9 +97,9 @@ func TestLoggerPlugin_FileOutput(t *testing.T) {
 	}
 
 	plugin := &LoggerPlugin{}
-	err := plugin.Start(config)
+	err := plugin.Startup(context.Background(), config)
 	require.NoError(t, err)
-	defer plugin.Stop()
+	defer plugin.Shutdown(context.Background())
 
 	// Write a test log
 	logger := GetLogger()
@@ -127,9 +128,9 @@ func TestLoggerPlugin_BothOutput(t *testing.T) {
 	}
 
 	plugin := &LoggerPlugin{}
-	err := plugin.Start(config)
+	err := plugin.Startup(context.Background(), config)
 	require.NoError(t, err)
-	defer plugin.Stop()
+	defer plugin.Shutdown(context.Background())
 
 	// Write a test log
 	logger := GetLogger()
@@ -173,9 +174,9 @@ func TestLoggerPlugin_AddSource(t *testing.T) {
 			}
 
 			plugin := &LoggerPlugin{}
-			err := plugin.Start(config)
+			err := plugin.Startup(context.Background(), config)
 			require.NoError(t, err)
-			defer plugin.Stop()
+			defer plugin.Shutdown(context.Background())
 
 			// Write a test log
 			logger := GetLogger()
@@ -209,7 +210,7 @@ func TestLoggerPlugin_Reload(t *testing.T) {
 		Format: "json",
 		Output: "stdout",
 	}
-	err := plugin.Start(initialConfig)
+	err := plugin.Startup(context.Background(), initialConfig)
 	require.NoError(t, err)
 
 	// Reload with new config
@@ -219,12 +220,12 @@ func TestLoggerPlugin_Reload(t *testing.T) {
 		Output:    "stderr",
 		AddSource: true,
 	}
-	err = plugin.Reload(newConfig)
+	err = plugin.Reload(context.Background(), newConfig)
 	assert.NoError(t, err)
 	assert.NotNil(t, plugin.logger)
 
 	// Clean up
-	_ = plugin.Stop()
+	_ = plugin.Shutdown(context.Background())
 }
 
 func TestLoggerPlugin_Stop(t *testing.T) {
@@ -235,10 +236,10 @@ func TestLoggerPlugin_Stop(t *testing.T) {
 		Format: "json",
 		Output: "stdout",
 	}
-	err := plugin.Start(config)
+	err := plugin.Startup(context.Background(), config)
 	require.NoError(t, err)
 
-	err = plugin.Stop()
+	err = plugin.Shutdown(context.Background())
 	assert.NoError(t, err)
 	assert.Nil(t, plugin.logger)
 	assert.Nil(t, plugin.config)
@@ -248,7 +249,7 @@ func TestLoggerPlugin_InvalidConfig(t *testing.T) {
 	plugin := &LoggerPlugin{}
 
 	// Test with invalid config type
-	err := plugin.Start("invalid config")
+	err := plugin.Startup(context.Background(), "invalid config")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid logger config type")
 }
@@ -294,9 +295,9 @@ func TestGetLogger(t *testing.T) {
 		Format: "json",
 		Output: "stdout",
 	}
-	err := plugin.Start(config)
+	err := plugin.Startup(context.Background(), config)
 	require.NoError(t, err)
-	defer plugin.Stop()
+	defer plugin.Shutdown(context.Background())
 
 	logger = GetLogger()
 	assert.NotNil(t, logger)
@@ -315,9 +316,9 @@ func TestLoggerPlugin_TextFormat(t *testing.T) {
 	}
 
 	plugin := &LoggerPlugin{}
-	err := plugin.Start(config)
+	err := plugin.Startup(context.Background(), config)
 	require.NoError(t, err)
-	defer plugin.Stop()
+	defer plugin.Shutdown(context.Background())
 
 	// Write a test log
 	logger := GetLogger()
@@ -349,14 +350,14 @@ func TestLoggerPlugin_DefaultValues(t *testing.T) {
 	err := defaults.SetDefaults(config)
 	require.NoError(t, err)
 
-	err = plugin.Start(config)
+	err = plugin.Startup(context.Background(), config)
 	require.NoError(t, err)
-	defer plugin.Stop()
+	defer plugin.Shutdown(context.Background())
 
 	// Check that defaults were applied
 	assert.Equal(t, "info", plugin.config.Level)
 	assert.Equal(t, "json", plugin.config.Format)
 	assert.Equal(t, "stdout", plugin.config.Output)
 	assert.Equal(t, "./app.log", plugin.config.FilePath)
-	assert.True(t, plugin.config.AddSource)
+	assert.False(t, plugin.config.AddSource)
 }

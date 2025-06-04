@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -138,7 +139,8 @@ func (pm *PluginManager[T]) Initialize(config *T) error {
 	return discover(reflect.ValueOf(config), "")
 }
 
-func (pm *PluginManager[T]) Startup() error {
+// Startup starts all registered plugins with context
+func (pm *PluginManager[T]) Startup(ctx context.Context) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -147,7 +149,7 @@ func (pm *PluginManager[T]) Startup() error {
 			continue
 		}
 
-		if err := entry.Plugin.Start(entry.Config); err != nil {
+		if err := entry.Plugin.Startup(ctx, entry.Config); err != nil {
 			return fmt.Errorf("failed to start plugin %s: %w", pluginKey, err)
 		}
 
@@ -164,7 +166,8 @@ func (pm *PluginManager[T]) Startup() error {
 	return nil
 }
 
-func (pm *PluginManager[T]) Shutdown() error {
+// Shutdown stops all running plugins with context
+func (pm *PluginManager[T]) Shutdown(ctx context.Context) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -173,7 +176,7 @@ func (pm *PluginManager[T]) Shutdown() error {
 			continue
 		}
 
-		if err := entry.Plugin.Stop(); err != nil {
+		if err := entry.Plugin.Shutdown(ctx); err != nil {
 			return fmt.Errorf("failed to stop plugin %s: %w", pluginKey, err)
 		}
 
@@ -287,7 +290,7 @@ func (pm *PluginManager[T]) reloadPluginConfig(config Config, newConfig any, fie
 
 	if exists && entry.started {
 		// Reload registered plugin
-		if err := entry.Plugin.Reload(newConfig); err != nil {
+		if err := entry.Plugin.Reload(context.Background(), newConfig); err != nil {
 			return fmt.Errorf("smart plugin reload failed, key=%s, err=%w", pluginKey, err)
 		}
 

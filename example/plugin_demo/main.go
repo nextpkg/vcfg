@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/nextpkg/vcfg"
 )
+
+//go:generate go run config.go
 
 // main demonstrates basic plugin loading functionality using MustInit method
 // It supports multiple Kafka plugin instances based on configuration blocks
@@ -22,7 +25,7 @@ func main() {
 	// This will load configuration from config.yaml file
 	configManager := vcfg.MustLoad[AppConfig]("config.yaml")
 	defer func() {
-		if err := configManager.Close(); err != nil {
+		if err := configManager.CloseWithContext(context.Background()); err != nil {
 			slog.Error("Failed to close config manager", "error", err)
 		}
 	}()

@@ -88,7 +88,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Failed to create config manager: %v", err)
 	}
-	defer cm.Close()
+	defer cm.CloseWithContext(context.Background())
 
 	fmt.Println("✅ Configuration manager started with hot reload")
 	fmt.Println("\n💡 Try modifying config.yaml to see hot reload in action!")

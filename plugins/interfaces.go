@@ -1,13 +1,16 @@
 package plugins
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // 插件定义
 type (
 	Plugin interface {
-		Start(config any) error
-		Reload(config any) error
-		Stop() error
+		Startup(ctx context.Context, config any) error
+		Reload(ctx context.Context, config any) error
+		Shutdown(ctx context.Context) error
 	}
 	Config interface {
 		baseConfigEmbedded() *BaseConfig

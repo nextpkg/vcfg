@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -13,13 +14,16 @@ type MockPluginWithError struct {
 	MockPlugin
 }
 
-func (mp *MockPluginWithError) Start(config any) error {
-	// Always return an error for testing purposes
-	return errors.New("failed to start plugin")
+func (mp *MockPluginWithError) Startup(ctx context.Context, config any) error {
+	return errors.New("start error")
 }
 
-func (mp *MockPluginWithError) Stop() error {
-	return errors.New("mock stop error")
+func (mp *MockPluginWithError) Reload(ctx context.Context, config any) error {
+	return errors.New("reload error")
+}
+
+func (mp *MockPluginWithError) Shutdown(ctx context.Context) error {
+	return errors.New("stop error")
 }
 
 // TestPluginManager_Initialize tests the Initialize method
@@ -240,7 +244,7 @@ func TestPluginManager_Startup(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Start plugins
-	err = manager.Startup()
+	err = manager.Startup(context.Background())
 	assert.NoError(t, err)
 
 	// Verify plugins are started
@@ -251,7 +255,7 @@ func TestPluginManager_Startup(t *testing.T) {
 	}
 
 	// Starting again should not cause error
-	err = manager.Startup()
+	err = manager.Startup(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -282,7 +286,7 @@ func TestPluginManager_StartupWithError(t *testing.T) {
 	}
 
 	// Start plugins should fail
-	err = manager.Startup()
+	err = manager.Startup(context.Background())
 	if err == nil {
 		t.Fatal("Expected error but got nil")
 	}
@@ -314,11 +318,11 @@ func TestPluginManager_Shutdown(t *testing.T) {
 	// Initialize and start plugins
 	err := manager.Initialize(config)
 	assert.NoError(t, err)
-	err = manager.Startup()
+	err = manager.Startup(context.Background())
 	assert.NoError(t, err)
 
 	// Shutdown plugins
-	err = manager.Shutdown()
+	err = manager.Shutdown(context.Background())
 	assert.NoError(t, err)
 
 	// Verify plugins are stopped
@@ -329,7 +333,7 @@ func TestPluginManager_Shutdown(t *testing.T) {
 	}
 
 	// Shutting down again should not cause error
-	err = manager.Shutdown()
+	err = manager.Shutdown(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -366,7 +370,7 @@ func TestPluginManager_ShutdownWithError(t *testing.T) {
 	manager.mu.Unlock()
 
 	// Shutdown should fail
-	err = manager.Shutdown()
+	err = manager.Shutdown(context.Background())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to stop plugin")
 }

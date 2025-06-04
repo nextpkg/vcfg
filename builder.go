@@ -1,6 +1,7 @@
 package vcfg
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -96,7 +97,7 @@ func (b *Builder[T]) Build() (*ConfigManager[T], error) {
 			return nil, fmt.Errorf("failed to initialize plugins: %w", err)
 		}
 
-		err = cm.pluginManager.Startup()
+		err = cm.pluginManager.Startup(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("failed to startup plugins: %w", err)
 		}

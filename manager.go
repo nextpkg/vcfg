@@ -1,6 +1,7 @@
 package vcfg
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -26,6 +27,7 @@ type (
 		mu            sync.RWMutex
 		watchers      []func() // cleanup functions for watchers
 		pluginManager *plugins.PluginManager[T]
+		ctx           context.Context
 	}
 
 	// Watcher interface for providers that support watching configuration changes
@@ -58,6 +60,7 @@ func newManager[T any](sources ...any) *ConfigManager[T] {
 		koanf:         koanf.New("."),
 		watchers:      make([]func(), 0),
 		pluginManager: plugins.NewPluginManager[T](),
+		ctx:           context.Background(),
 	}
 }
 
@@ -223,16 +226,18 @@ func (cm *ConfigManager[T]) EnablePlugins() error {
 // StartPlugins starts all registered plugins
 // This method should be called after EnablePlugins to start the plugin instances
 func (cm *ConfigManager[T]) StartPlugins() error {
-	return cm.pluginManager.Startup()
+	return cm.pluginManager.Startup(cm.ctx)
 }
 
 // StopPlugins stops all running plugins
 // This method gracefully stops all plugin instances
 func (cm *ConfigManager[T]) StopPlugins() error {
-	return cm.pluginManager.Shutdown()
+	return cm.pluginManager.Shutdown(cm.ctx)
 }
 
-func (cm *ConfigManager[T]) MustEnableAndStartPlugin() {
+// MustEnableAndStartPluginWithContext enables and starts all plugins with context, panics on error
+// This is a convenience method that combines EnablePlugins and StartPlugins with context support
+func (cm *ConfigManager[T]) MustEnableAndStartPluginWithContext(ctx context.Context) {
 	if err := cm.EnablePlugins(); err != nil {
 		panic(err)
 	}
@@ -242,8 +247,8 @@ func (cm *ConfigManager[T]) MustEnableAndStartPlugin() {
 	}
 }
 
-// Close 关闭配置管理器，包括所有插件和监听器
-func (cm *ConfigManager[T]) Close() error {
+// CloseWithContext closes the configuration manager with context, including all plugins and watchers
+func (cm *ConfigManager[T]) CloseWithContext(ctx context.Context) error {
 	if cm == nil {
 		return nil
 	}
@@ -252,5 +257,5 @@ func (cm *ConfigManager[T]) Close() error {
 	cm.DisableWatch()
 
 	// 关闭所有插件
-	return cm.pluginManager.Shutdown()
+	return cm.pluginManager.Shutdown(cm.ctx)
 }

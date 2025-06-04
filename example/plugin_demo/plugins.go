@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -18,8 +19,8 @@ func init() {
 // KafkaPlugin represents a Kafka plugin
 type KafkaPlugin struct{}
 
-// Start implements plugins.Plugin interface
-func (p *KafkaPlugin) Start(config any) error {
+// Startup implements plugins.Plugin interface
+func (p *KafkaPlugin) Startup(ctx context.Context, config any) error {
 	if kafkaConfig, ok := config.(*KafkaConfig); ok {
 		slog.Info("Kafka plugin started",
 			"bootstrap_servers", kafkaConfig.BootstrapServers,
@@ -31,7 +32,7 @@ func (p *KafkaPlugin) Start(config any) error {
 }
 
 // Reload implements plugins.Plugin interface
-func (p *KafkaPlugin) Reload(config any) error {
+func (p *KafkaPlugin) Reload(ctx context.Context, config any) error {
 	if kafkaConfig, ok := config.(*KafkaConfig); ok {
 		slog.Info("Kafka plugin reloaded",
 			"bootstrap_servers", kafkaConfig.BootstrapServers,
@@ -42,8 +43,8 @@ func (p *KafkaPlugin) Reload(config any) error {
 	return fmt.Errorf("invalid kafka config type: %T", config)
 }
 
-// Stop implements plugins.Plugin interface
-func (p *KafkaPlugin) Stop() error {
+// Shutdown implements plugins.Plugin interface
+func (p *KafkaPlugin) Shutdown(ctx context.Context) error {
 	slog.Info("Kafka plugin stopped")
 	return nil
 }
@@ -51,8 +52,8 @@ func (p *KafkaPlugin) Stop() error {
 // RedisPlugin represents a Redis plugin
 type RedisPlugin struct{}
 
-// Start implements plugins.Plugin interface
-func (p *RedisPlugin) Start(config any) error {
+// Startup implements plugins.Plugin interface
+func (p *RedisPlugin) Startup(ctx context.Context, config any) error {
 	if redisConfig, ok := config.(*RedisConfig); ok {
 		slog.Info("Redis plugin started",
 			"host", redisConfig.Host,
@@ -64,7 +65,7 @@ func (p *RedisPlugin) Start(config any) error {
 }
 
 // Reload implements plugins.Plugin interface
-func (p *RedisPlugin) Reload(config any) error {
+func (p *RedisPlugin) Reload(ctx context.Context, config any) error {
 	if redisConfig, ok := config.(*RedisConfig); ok {
 		slog.Info("Redis plugin reloaded",
 			"host", redisConfig.Host,
@@ -75,8 +76,8 @@ func (p *RedisPlugin) Reload(config any) error {
 	return fmt.Errorf("invalid redis config type: %T", config)
 }
 
-// Stop implements plugins.Plugin interface
-func (p *RedisPlugin) Stop() error {
+// Shutdown implements plugins.Plugin interface
+func (p *RedisPlugin) Shutdown(ctx context.Context) error {
 	slog.Info("Redis plugin stopped")
 	return nil
 }

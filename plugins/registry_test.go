@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"testing"
@@ -12,18 +13,18 @@ type MockPlugin struct {
 	config  any
 }
 
-func (mp *MockPlugin) Start(config any) error {
+func (mp *MockPlugin) Startup(ctx context.Context, config any) error {
 	mp.started = true
 	mp.config = config
 	return nil
 }
 
-func (mp *MockPlugin) Reload(config any) error {
+func (mp *MockPlugin) Reload(ctx context.Context, config any) error {
 	mp.config = config
 	return nil
 }
 
-func (mp *MockPlugin) Stop() error {
+func (mp *MockPlugin) Shutdown(ctx context.Context) error {
 	mp.started = false
 	return nil
 }
