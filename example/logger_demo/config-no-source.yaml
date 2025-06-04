@@ -1,0 +1,16 @@
+# Logger Demo Configuration (Without Source Info)
+
+# Application settings
+app:
+  name: "Logger Demo App"
+  version: "1.0.0"
+  debug: false
+
+# Logger plugin configuration - without source file information
+logger:
+  type: "vcfg-logger"              # Plugin type (required)
+  level: "info"                # Log level: debug, info, warn, error
+  format: "text"               # Output format: json, text
+  output: "stdout"             # Output target: stdout, stderr, file, both
+  add_source: false            # Disable source file info (no file name and line number)
+  time_format: "15:04:05"      # Simple time format for text output

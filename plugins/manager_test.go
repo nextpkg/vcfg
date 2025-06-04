@@ -37,7 +37,7 @@ func TestPluginManager_Initialize(t *testing.T) {
 	// Clean up registry before each test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	// Register test plugin types
@@ -85,6 +85,11 @@ func TestPluginManager_Initialize(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			name:        "invalid config type",
+			config:      nil,
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -117,7 +122,7 @@ func TestPluginManager_InitializeWithStartError(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	// Register a plugin type that can return start errors
@@ -146,7 +151,7 @@ func TestPluginManager_InitializePointerConversion(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	// Register test plugin type
@@ -178,7 +183,7 @@ func TestPluginManager_InitializeConfigCopy(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	// Register test plugin type
@@ -214,7 +219,7 @@ func TestPluginManager_Startup(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	manager := NewPluginManager[SimpleTestConfig]()
@@ -254,7 +259,7 @@ func TestPluginManager_StartupWithError(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	manager := NewPluginManager[SimpleTestConfig]()
@@ -290,7 +295,7 @@ func TestPluginManager_Shutdown(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	manager := NewPluginManager[SimpleTestConfig]()
@@ -332,7 +337,7 @@ func TestPluginManager_ShutdownWithError(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	manager := NewPluginManager[SimpleTestConfig]()
@@ -370,7 +375,7 @@ func TestPluginManager_HandleSmartConfigChange(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	manager := NewPluginManager[SimpleTestConfig]()
@@ -415,7 +420,7 @@ func TestPluginManager_Clone(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	manager := NewPluginManager[SimpleTestConfig]()

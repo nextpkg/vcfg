@@ -43,18 +43,18 @@ type (
 	// globalPluginTypeRegistry 全局插件注册表
 	globalPluginTypeRegistry struct {
 		mu          sync.RWMutex
-		pluginTypes map[string]*PluginTypeEntry // key: pluginType
+		pluginTypes map[string]*pluginTypeEntry // key: pluginType
 	}
 
-	PluginTypeEntry struct {
-		PluginFactory PluginFactory
-		ConfigFactory ConfigFactory
+	pluginTypeEntry struct {
+		PluginFactory pluginFactory
+		ConfigFactory configFactory
 		PluginType    string
 		AutoDiscover  bool
 	}
 
-	PluginFactory func() Plugin
-	ConfigFactory func() Config
+	pluginFactory func() Plugin
+	configFactory func() Config
 )
 
 type (

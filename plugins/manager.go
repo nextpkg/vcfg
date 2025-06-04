@@ -72,7 +72,11 @@ func (pm *PluginManager[T]) Initialize(config *T) error {
 				if oldConfig, ok := fieldInterface.(Config); ok {
 					pluginType := getConfigType(oldConfig)
 
-					slog.Debug("Found config field", "path", fieldPath, "type", pluginType)
+					slog.Debug("Found config field",
+						"path", fieldPath,
+						"type", pluginType,
+						"raw_type", oldConfig.baseConfigEmbedded().Type,
+					)
 
 					// Check if we have a registered plugin type for this config
 					entry, exists := pluginTypes[pluginType]

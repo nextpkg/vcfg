@@ -17,7 +17,7 @@ var (
 func getGlobalPluginRegistry() *globalPluginTypeRegistry {
 	globalRegistryOnce.Do(func() {
 		globalRegistry = &globalPluginTypeRegistry{
-			pluginTypes: make(map[string]*PluginTypeEntry),
+			pluginTypes: make(map[string]*pluginTypeEntry),
 		}
 	})
 	return globalRegistry
@@ -53,7 +53,7 @@ func RegisterPluginType[P PluginPtr[PT], C ConfigPtr[CT], PT any, CT any](plugin
 		autoDiscover = opts[0].AutoDiscover
 	}
 
-	registry.pluginTypes[pluginType] = &PluginTypeEntry{
+	registry.pluginTypes[pluginType] = &pluginTypeEntry{
 		PluginType:    pluginType,
 		PluginFactory: pluginFactory,
 		ConfigFactory: configFactory,
@@ -86,7 +86,7 @@ func UnregisterPluginType(pluginType string) {
 	slog.Info("Plugin type unregistered", "type", pluginType)
 }
 
-func clonePluginTypes() map[string]*PluginTypeEntry {
+func clonePluginTypes() map[string]*pluginTypeEntry {
 	registry := getGlobalPluginRegistry()
 	registry.mu.RLock()
 	defer registry.mu.RUnlock()

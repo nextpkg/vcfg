@@ -1,0 +1,15 @@
+# Logger Demo Configuration
+
+# Application settings
+app:
+  name: "Logger Demo App"
+  version: "1.0.0"
+  debug: true
+
+# Logger plugin configuration
+logger:
+  type: vcfg-logger
+  level: "debug"
+  format: "json"
+  output: "stdout"
+  add_source: true

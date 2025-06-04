@@ -63,9 +63,6 @@ type FeatureConfig struct {
 	EnableRateLimit bool `default:"true"`
 }
 
-// SetDefaults sets default values using struct tags
-// SetDefaults 方法不再需要，默认值通过结构体标签自动设置
-
 func main() {
 	fmt.Println("=== Defaults Demo ===")
 	fmt.Println()

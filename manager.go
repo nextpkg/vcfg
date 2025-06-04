@@ -128,7 +128,7 @@ func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 // When a configuration change is detected, it reloads the configuration and
 // triggers plugin reloads for affected plugins.
 // This method is thread-safe and can be called multiple times safely.
-func (cm *ConfigManager[T]) EnableWatch() {
+func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 	cm.once.Do(func() {
 		for _, providerConfig := range cm.providers {
 			if watcher, ok := providerConfig.Provider.(Watcher); ok {
@@ -176,6 +176,8 @@ func (cm *ConfigManager[T]) EnableWatch() {
 			}
 		}
 	})
+
+	return cm
 }
 
 // DisableWatch stops monitoring changes of all configuration providers.
@@ -205,10 +207,10 @@ func (cm *ConfigManager[T]) Get() *T {
 	return ret
 }
 
-// AutoRegisterPlugins automatically discovers and registers plugin instances based on current configuration
+// EnablePlugins automatically discovers and registers plugin instances based on current configuration
 // This method uses the global plugin type registry to automatically instantiate and register plugins
 // for any configuration field that matches a registered plugin type
-func (cm *ConfigManager[T]) AutoRegisterPlugins() error {
+func (cm *ConfigManager[T]) EnablePlugins() error {
 	config := cm.Get()
 	if config == nil {
 		return fmt.Errorf("no configuration available for auto-registration")
@@ -219,21 +221,25 @@ func (cm *ConfigManager[T]) AutoRegisterPlugins() error {
 }
 
 // StartPlugins starts all registered plugins
-// This method should be called after AutoRegisterPlugins to start the plugin instances
+// This method should be called after EnablePlugins to start the plugin instances
 func (cm *ConfigManager[T]) StartPlugins() error {
-	if cm == nil || cm.pluginManager == nil {
-		return fmt.Errorf("config manager or plugin manager not initialized")
-	}
 	return cm.pluginManager.Startup()
 }
 
 // StopPlugins stops all running plugins
 // This method gracefully stops all plugin instances
 func (cm *ConfigManager[T]) StopPlugins() error {
-	if cm == nil || cm.pluginManager == nil {
-		return fmt.Errorf("config manager or plugin manager not initialized")
-	}
 	return cm.pluginManager.Shutdown()
+}
+
+func (cm *ConfigManager[T]) MustEnableAndStartPlugin() {
+	if err := cm.EnablePlugins(); err != nil {
+		panic(err)
+	}
+
+	if err := cm.StartPlugins(); err != nil {
+		panic(err)
+	}
 }
 
 // Close 关闭配置管理器，包括所有插件和监听器

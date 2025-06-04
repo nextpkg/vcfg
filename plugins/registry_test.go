@@ -72,7 +72,7 @@ func TestRegisterPluginType(t *testing.T) {
 			// Clean up registry before each subtest
 			registry := getGlobalPluginRegistry()
 			registry.mu.Lock()
-			registry.pluginTypes = make(map[string]*PluginTypeEntry)
+			registry.pluginTypes = make(map[string]*pluginTypeEntry)
 			registry.mu.Unlock()
 
 			if tt.expectPanic {
@@ -140,7 +140,7 @@ func TestRegisterPluginTypePanic(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	// Register a plugin type first
@@ -160,7 +160,7 @@ func TestListPluginTypes(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	// Test empty registry
@@ -196,7 +196,7 @@ func TestUnregisterPluginType(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	// Register a plugin type
@@ -226,7 +226,7 @@ func TestClonePluginTypes(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
-	registry.pluginTypes = make(map[string]*PluginTypeEntry)
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
 	registry.mu.Unlock()
 
 	// Test empty registry
