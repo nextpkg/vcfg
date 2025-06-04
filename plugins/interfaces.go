@@ -29,9 +29,7 @@ type (
 	}
 
 	RegisterOptions struct {
-		InstanceName string // Optional: explicit instance name
-		ConfigPath   string // Optional: explicit config path
-		AutoDiscover bool   // Whether to enable auto-discovery for this type
+		AutoDiscover bool // Whether to enable auto-discovery for this type
 	}
 )
 

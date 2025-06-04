@@ -6,5 +6,5 @@ import "github.com/nextpkg/vcfg/plugins"
 // This function automatically registers all builtin plugins when the package is imported
 func init() {
 	// Register logger plugin
-	plugins.RegisterPluginType("vcfg-logger", &LoggerPlugin{}, &LoggerConfig{})
+	plugins.RegisterPluginType("", &LoggerPlugin{}, &LoggerConfig{})
 }

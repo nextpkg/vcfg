@@ -16,17 +16,17 @@ type AppConfig struct {
 
 // KafkaConfig represents Kafka plugin configuration
 type KafkaConfig struct {
-	plugins.BaseConfig
-	BootstrapServers string `json:"bootstrap_servers" yaml:"bootstrap_servers" koanf:"bootstrap_servers"`
-	Topic            string `json:"topic" yaml:"topic" koanf:"topic"`
-	GroupID          string `json:"group_id" yaml:"group_id" koanf:"group_id"`
+	plugins.BaseConfig `koanf:",squash"`
+	BootstrapServers   string `json:"bootstrap_servers" yaml:"bootstrap_servers" koanf:"bootstrap_servers"`
+	Topic              string `json:"topic" yaml:"topic" koanf:"topic"`
+	GroupID            string `json:"group_id" yaml:"group_id" koanf:"group_id"`
 }
 
 // RedisConfig represents Redis plugin configuration
 type RedisConfig struct {
-	plugins.BaseConfig
-	Host     string `json:"host" yaml:"host" koanf:"host"`
-	Port     int    `json:"port" yaml:"port" koanf:"port"`
-	Password string `json:"password" yaml:"password" koanf:"password"`
-	DB       int    `json:"db" yaml:"db" koanf:"db"`
+	plugins.BaseConfig `koanf:",squash"`
+	Host               string `json:"host" yaml:"host" koanf:"host"`
+	Port               int    `json:"port" yaml:"port" koanf:"port"`
+	Password           string `json:"password" yaml:"password" koanf:"password"`
+	DB                 int    `json:"db" yaml:"db" koanf:"db"`
 }

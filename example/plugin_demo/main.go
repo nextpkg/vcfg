@@ -18,9 +18,9 @@ func main() {
 
 	slog.Info("Starting plugin demo application")
 
-	// Initialize configuration manager using MustInit method
+	// Initialize configuration manager using MustLoad method
 	// This will load configuration from config.yaml file
-	configManager := vcfg.MustInit[AppConfig]("config.yaml")
+	configManager := vcfg.MustLoad[AppConfig]("config.yaml")
 	defer func() {
 		if err := configManager.Close(); err != nil {
 			slog.Error("Failed to close config manager", "error", err)
@@ -45,14 +45,14 @@ func main() {
 		"bootstrap_servers", config.KafkaStream.BootstrapServers,
 		"topic", config.KafkaStream.Topic)
 
-	// Auto-register plugins based on configuration
+	// Enable plugins based on configuration
 	// This will create plugin instances for each Kafka configuration block
-	if err := configManager.AutoRegisterPlugins(); err != nil {
-		slog.Error("Failed to auto-register plugins", "error", err)
+	if err := configManager.EnablePlugins(); err != nil {
+		slog.Error("Failed to enable plugins", "error", err)
 		return
 	}
 
-	slog.Info("Plugins auto-registered successfully")
+	slog.Info("Plugins enabled successfully")
 
 	// Start all registered plugins
 	if err := configManager.StartPlugins(); err != nil {

@@ -98,3 +98,7 @@ func copyConfig[T Config](src, dst T) error {
 
 	return nil
 }
+
+func ToPtr[T any](t T) *T {
+	return &t
+}

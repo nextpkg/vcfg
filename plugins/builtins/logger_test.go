@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nextpkg/vcfg/defaults"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -343,7 +344,12 @@ func TestLoggerPlugin_DefaultValues(t *testing.T) {
 
 	// Start with minimal config
 	config := &LoggerConfig{}
-	err := plugin.Start(config)
+
+	// Set default values
+	err := defaults.SetDefaults(config)
+	require.NoError(t, err)
+
+	err = plugin.Start(config)
 	require.NoError(t, err)
 	defer plugin.Stop()
 
@@ -352,4 +358,5 @@ func TestLoggerPlugin_DefaultValues(t *testing.T) {
 	assert.Equal(t, "json", plugin.config.Format)
 	assert.Equal(t, "stdout", plugin.config.Output)
 	assert.Equal(t, "./app.log", plugin.config.FilePath)
+	assert.True(t, plugin.config.AddSource)
 }

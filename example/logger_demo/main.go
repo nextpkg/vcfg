@@ -7,18 +7,12 @@ import (
 
 	"github.com/nextpkg/vcfg"
 	"github.com/nextpkg/vcfg/plugins/builtins"
-	_ "github.com/nextpkg/vcfg/plugins/builtins" // Import to register builtin plugins
 )
-
-// LoggerConfig wraps the builtin logger config to ensure proper field mapping
-type LoggerConfig struct {
-	builtins.LoggerConfig `koanf:",squash"`
-}
 
 // AppConfig represents the application configuration
 type AppConfig struct {
 	// Logger configuration
-	Logger LoggerConfig `json:"logger" yaml:"logger" koanf:"logger"`
+	Logger builtins.LoggerConfig
 
 	// Application settings
 	App struct {
@@ -34,9 +28,7 @@ func main() {
 
 	// Debug: print the loaded configuration
 	config := cm.Get()
-	fmt.Printf("Loaded config: %+v\n", config)
-	fmt.Printf("Logger config: %+v\n", config.Logger)
-	fmt.Printf("Logger Type: %s\n", config.Logger.Type)
+	fmt.Printf("Logger config: %#v\n", config.Logger)
 
 	cm.MustEnableAndStartPlugin()
 

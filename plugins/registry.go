@@ -23,6 +23,7 @@ func getGlobalPluginRegistry() *globalPluginTypeRegistry {
 	return globalRegistry
 }
 
+// pluginType留空则使用类型名称自动推导
 func RegisterPluginType[P PluginPtr[PT], C ConfigPtr[CT], PT any, CT any](pluginType string, p P, c C, opts ...RegisterOptions) {
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()

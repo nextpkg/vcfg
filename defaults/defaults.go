@@ -32,6 +32,14 @@ func SetDefaults(ptr any) error {
 			continue
 		}
 
+		// Handle nested structs recursively
+		if field.Kind() == reflect.Struct {
+			if err := SetDefaults(field.Addr().Interface()); err != nil {
+				return err
+			}
+			continue
+		}
+
 		// Get default tag value
 		defaultValue, ok := fieldType.Tag.Lookup("default")
 		if !ok {

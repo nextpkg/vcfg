@@ -14,12 +14,12 @@ import (
 
 // LoggerConfig represents the configuration for the logger plugin
 type LoggerConfig struct {
-	plugins.BaseConfig
-	Level     string `default:"info"`      // log level: debug, info, warn, error
-	Format    string `default:"json"`      // log format: json, text
-	Output    string `default:"stdout"`    // output: stdout, stderr, file, both
-	FilePath  string `default:"./app.log"` // log file path
-	AddSource bool   `default:"true"`      // whether to add source file info
+	plugins.BaseConfig `koanf:",squash"`
+	Level              string `koanf:"level" default:"info"`          // log level: debug, info, warn, error
+	Format             string `koanf:"format" default:"json"`         // log format: json, text
+	Output             string `koanf:"output" default:"stdout"`       // output: stdout, stderr, file, both
+	FilePath           string `koanf:"file_path" default:"./app.log"` // log file path
+	AddSource          bool   `koanf:"add_source" default:"false"`    // whether to add source file info
 }
 
 // LoggerPlugin implements the logger plugin
@@ -106,7 +106,8 @@ func (p *LoggerPlugin) Start(config any) error {
 		"level", p.config.Level,
 		"format", p.config.Format,
 		"output", p.config.Output,
-		"add_source", p.config.AddSource)
+		"add_source", p.config.AddSource,
+	)
 
 	return nil
 }
