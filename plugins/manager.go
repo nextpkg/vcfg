@@ -258,8 +258,14 @@ func (pm *PluginManager[T]) handleConfigChangeRecursive(ctx context.Context, old
 
 	oldType := oldValue.Type()
 
+	// Collect all errors instead of returning immediately
+	var errors []error
+
 	for i := range oldValue.NumField() {
 		fieldType := oldType.Field(i)
+
+		slog.Debug("Processing field", "name", fieldType.Name, "path", fieldPath)
+
 		vOldField := oldValue.Field(i)
 		vNewField := newValue.Field(i)
 
@@ -269,7 +275,7 @@ func (pm *PluginManager[T]) handleConfigChangeRecursive(ctx context.Context, old
 		}
 
 		// Build field path for logging
-		fieldPath = getFieldPath(fieldPath, fieldType.Name)
+		currentFieldPath := getFieldPath(fieldPath, fieldType.Name)
 
 		// Check if the field implements Config interface
 		if vOldField.Kind() == reflect.Struct {
@@ -279,15 +285,24 @@ func (pm *PluginManager[T]) handleConfigChangeRecursive(ctx context.Context, old
 
 			if iOldField != nil {
 				if config, ok := iOldField.(Config); ok && !reflect.DeepEqual(iOldField, iNewField) {
-					return pm.reloadPluginConfig(ctx, config, iNewField, fieldPath)
+					// Process plugin config change but don't return immediately
+					if err := pm.reloadPluginConfig(ctx, config, iNewField, currentFieldPath); err != nil {
+						errors = append(errors, err)
+					}
 				} else {
 					// If not a plugin config, recursively check nested structures
-					return pm.handleConfigChangeRecursive(ctx, vOldField, vNewField, fieldPath)
+					if err := pm.handleConfigChangeRecursive(ctx, vOldField, vNewField, currentFieldPath); err != nil {
+						errors = append(errors, err)
+					}
 				}
 			}
 		}
 	}
 
+	// Return the first error if any occurred
+	if len(errors) > 0 {
+		return errors[0]
+	}
 	return nil
 }
 
@@ -306,21 +321,45 @@ func (pm *PluginManager[T]) reloadPluginConfig(ctx context.Context, config Confi
 		"key", pluginKey,
 	)
 
-	// Try to reload from registered plugins first
+	// Debug: List all registered plugins
 	pm.mu.RLock()
+	slog.Info("Searching for plugin",
+		"target_key", pluginKey,
+		"total_registered", len(pm.plugins),
+	)
+	for key, entry := range pm.plugins {
+		slog.Debug("Registered plugin",
+			"key", key,
+			"type", entry.PluginType,
+			"instance", entry.InstanceName,
+			"started", entry.started,
+			"config_path", entry.ConfigPath,
+		)
+	}
+
+	// Try to reload from registered plugins first
 	entry, exists := pm.plugins[pluginKey]
 	pm.mu.RUnlock()
 
-	if exists && entry.started {
-		// Reload registered plugin
-		if err := entry.Plugin.Reload(ctx, newConfig); err != nil {
-			return fmt.Errorf("smart plugin reload failed, key=%s, err=%w", pluginKey, err)
-		}
+	if exists {
+		slog.Info("Plugin found", "key", pluginKey, "started", entry.started)
+		if entry.started {
+			// Reload registered plugin
+			slog.Info("Reloading plugin", "key", pluginKey)
+			if err := entry.Plugin.Reload(ctx, newConfig); err != nil {
+				return fmt.Errorf("smart plugin reload failed, key=%s, err=%w", pluginKey, err)
+			}
 
-		// Update config for registered plugins
-		if newCfg, ok := newConfig.(Config); ok {
-			entry.Config = newCfg
+			// Update config for registered plugins
+			if newCfg, ok := newConfig.(Config); ok {
+				entry.Config = newCfg
+			}
+			slog.Info("Plugin reloaded successfully", "key", pluginKey)
+		} else {
+			slog.Warn("Plugin found but not started", "key", pluginKey)
 		}
+	} else {
+		slog.Warn("Plugin not found in registry", "key", pluginKey)
 	}
 
 	return nil

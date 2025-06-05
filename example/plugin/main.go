@@ -201,6 +201,7 @@ func (p *HealthPlugin) Reload(ctx context.Context, config any) error {
 	newConfig := config.(*HealthConfig)
 
 	fmt.Printf("[HealthPlugin] Reloading configuration...\n")
+	fmt.Printf("[HealthPlugin] Port: %d -> %d\n", p.config.Port, newConfig.Port)
 
 	// Stop current health checks
 	p.stopHealthChecks()

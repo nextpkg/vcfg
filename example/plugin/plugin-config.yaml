@@ -14,7 +14,7 @@ metrics:
 # Custom health check plugin
 health:
   type: "health"
-  port: 8083
+  port: 8081
   path: "/health"
   checks:
     - "database"
