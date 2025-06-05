@@ -226,7 +226,7 @@ func (pm *PluginManager[T]) Reload(ctx context.Context, oldConfig, newConfig *T)
 	pm.mu.RLock()
 	if len(pm.plugins) == 0 {
 		pm.mu.RUnlock()
-		slogs.Debug("No plugins registered, cannot reload plugins")
+		slogs.Debug("No plugins registered, no plugin need reload")
 		return nil
 	}
 	pm.mu.RUnlock()
@@ -316,7 +316,7 @@ func (pm *PluginManager[T]) reloadPluginConfig(ctx context.Context, config Confi
 	instanceName := strings.ToLower(fieldPath)
 	pluginKey := getPluginKey(pluginType, instanceName)
 
-	slogs.Info("Smart config change detected",
+	slogs.Debug("Smart config change detected",
 		"field", fieldPath,
 		"plugin_type", pluginType,
 		"instance", instanceName,

@@ -387,8 +387,7 @@ func TestPluginManager_Reload(t *testing.T) {
 
 	// Test with no plugins registered
 	err := manager.Reload(context.Background(), nil, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no plugins registered")
+	assert.Nil(t, err)
 
 	// Register a plugin type
 	RegisterPluginType("test", &MockPlugin{}, &MockConfig{})

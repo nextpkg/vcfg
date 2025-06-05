@@ -57,12 +57,15 @@ func (f *ProviderFactory) CreateProviders(sources ...any) ([]ProviderConfig, err
 	for _, source := range sources {
 		switch s := source.(type) {
 		case string:
-			// String source treated as file path
-			// Create file provider and detect parser from file extension
-			provider := file.Provider(s)
+			// Create enhanced file watcher that monitors parent directory
+			// to handle atomic file operations properly
+			fileWatcher, err := NewFileWatcher(s)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create file watcher for %s: %w", s, err)
+			}
 			parser := f.getParserForFile(s)
 			configs = append(configs, ProviderConfig{
-				Provider: provider,
+				Provider: fileWatcher,
 				Parser:   parser,
 			})
 		case koanf.Provider:
@@ -110,6 +113,10 @@ func (f *ProviderFactory) detectParserRequirement(provider koanf.Provider) koanf
 		return nil
 	case *file.File:
 		// File provider only reads raw bytes, requires external parser
+		// Default to JSON parser for flexibility
+		return json.Parser()
+	case *FileWatcher:
+		// FileWatcher wraps file provider, also needs external parser
 		// Default to JSON parser for flexibility
 		return json.Parser()
 	default:
