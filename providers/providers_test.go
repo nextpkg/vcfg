@@ -136,3 +136,123 @@ func TestProviderFactory_AutoDetection(t *testing.T) {
 	assert.Equal(t, customProvider, configs[2].Provider)
 	assert.IsType(t, json.Parser(), configs[2].Parser)
 }
+
+// TestCustomJSONProvider tests the CustomJSONProvider implementation
+func TestCustomJSONProvider(t *testing.T) {
+	jsonData := []byte(`{"name": "test", "value": 42}`)
+	provider := NewCustomJSONProvider(jsonData)
+
+	// Test ReadBytes
+	data, err := provider.ReadBytes()
+	require.NoError(t, err)
+	assert.Equal(t, jsonData, data)
+
+	// Test Read method (should return error)
+	_, err = provider.Read()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Read method not implemented")
+
+	// Test RequiredParser
+	parser := provider.RequiredParser()
+	assert.IsType(t, json.Parser(), parser)
+}
+
+// TestCustomYAMLProvider tests the CustomYAMLProvider implementation
+func TestCustomYAMLProvider(t *testing.T) {
+	yamlData := []byte(`name: test\nvalue: 42`)
+	provider := NewCustomYAMLProvider(yamlData)
+
+	// Test ReadBytes
+	data, err := provider.ReadBytes()
+	require.NoError(t, err)
+	assert.Equal(t, yamlData, data)
+
+	// Test Read method (should return error)
+	_, err = provider.Read()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Read method not implemented")
+
+	// Test RequiredParser
+	parser := provider.RequiredParser()
+	assert.IsType(t, yaml.Parser(), parser)
+}
+
+// TestCustomProviders_EmptyData tests custom providers with empty data
+func TestCustomProviders_EmptyData(t *testing.T) {
+	// Test JSON provider with empty data
+	jsonProvider := NewCustomJSONProvider([]byte{})
+	data, err := jsonProvider.ReadBytes()
+	require.NoError(t, err)
+	assert.Empty(t, data)
+
+	// Test YAML provider with empty data
+	yamlProvider := NewCustomYAMLProvider([]byte{})
+	data, err = yamlProvider.ReadBytes()
+	require.NoError(t, err)
+	assert.Empty(t, data)
+}
+
+// TestCustomProviders_NilData tests custom providers with nil data
+func TestCustomProviders_NilData(t *testing.T) {
+	// Test JSON provider with nil data
+	jsonProvider := NewCustomJSONProvider(nil)
+	data, err := jsonProvider.ReadBytes()
+	require.NoError(t, err)
+	assert.Nil(t, data)
+
+	// Test YAML provider with nil data
+	yamlProvider := NewCustomYAMLProvider(nil)
+	data, err = yamlProvider.ReadBytes()
+	require.NoError(t, err)
+	assert.Nil(t, data)
+}
+
+// TestGetParserForFile tests the getParserForFile function with various file extensions
+func TestGetParserForFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		filePath string
+		expected interface{}
+	}{
+		{"JSON file", "config.json", json.Parser()},
+		{"YAML file", "config.yaml", yaml.Parser()},
+		{"YML file", "config.yml", yaml.Parser()},
+		{"Unknown extension", "config.txt", yaml.Parser()}, // defaults to YAML
+		{"No extension", "config", yaml.Parser()},          // defaults to YAML
+		{"Empty string", "", yaml.Parser()},                // defaults to YAML
+		{"Multiple dots", "config.backup.json", json.Parser()},
+		{"Case insensitive", "config.JSON", json.Parser()},
+		{"Case insensitive YAML", "config.YAML", yaml.Parser()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			factory := NewProviderFactory()
+			result := factory.getParserForFile(tt.filePath)
+			assert.IsType(t, tt.expected, result)
+		})
+	}
+}
+
+// TestProviderFactory_UnsupportedFileExtension tests handling of unsupported file extensions
+func TestProviderFactory_UnsupportedFileExtension(t *testing.T) {
+	factory := NewProviderFactory()
+
+	// Test with unsupported file extension (should default to YAML)
+	configs, err := factory.CreateProviders("config.xml", "config.ini")
+	require.NoError(t, err)
+	require.Len(t, configs, 2)
+
+	// Both should default to YAML parser
+	assert.IsType(t, yaml.Parser(), configs[0].Parser)
+	assert.IsType(t, yaml.Parser(), configs[1].Parser)
+}
+
+// TestProviderFactory_EmptyProviders tests factory with no providers
+func TestProviderFactory_EmptyProviders(t *testing.T) {
+	factory := NewProviderFactory()
+
+	configs, err := factory.CreateProviders()
+	require.NoError(t, err)
+	assert.Empty(t, configs)
+}

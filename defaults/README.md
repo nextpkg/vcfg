@@ -107,4 +107,4 @@ type Config struct {
 
 ## 示例
 
-查看 `example/defaults_demo` 目录中的完整示例，了解如何在复杂配置中使用默认值设置。
+查看 `example/defaults` 目录中的完整示例，了解如何在复杂配置中使用默认值设置。

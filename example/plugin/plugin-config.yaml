@@ -1,0 +1,36 @@
+# VCFG Plugin Development Example Configuration
+
+app:
+  name: "Plugin-Development-Example"
+  version: "1.0.0"
+
+# Plugin configurations
+plugins:
+  # Custom metrics plugin
+  metrics:
+    type: "metrics"
+    port: 9090
+    path: "/metrics"
+    interval: "5s"
+    enabled: true
+
+  # Custom health check plugin
+  health:
+    type: "health"
+    port: 8081
+    path: "/health"
+    checks:
+      - "database"
+      - "redis"
+      - "external_api"
+      - "file_system"
+    timeout: "3s"
+    interval: "8s"
+
+  # Built-in logger plugin
+  logger:
+    type: "logger"
+    level: "debug"
+    format: "text"
+    output: "stdout"
+    add_source: false

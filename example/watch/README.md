@@ -110,6 +110,5 @@ func (w *ConfigChangeWatcher) hasConfigChanged(newConfig *AppConfig) bool {
 
 ## 🔗 相关示例
 
-- [基础配置加载](../basic_demo/) - 学习基本的配置加载
-- [插件系统](../plugin_demo/) - 了解插件与热加载的结合
-- [简化插件框架](../simple_plugins_demo/) - 体验业务插件架构
+- [基础配置加载](../basic/) - 学习基本的配置加载
+- [插件系统](../plugin/) - 了解插件与热加载的结合

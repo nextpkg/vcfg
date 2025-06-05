@@ -29,20 +29,22 @@ The logger plugin provides:
 ### With Source File Information
 
 ```bash
-cd /home/ruifenglin/app/vcfg/example/logger_demo
+cd /home/ruifenglin/app/vcfg/example/logger
 go run main.go
 ```
 
 This will use `config.yaml` which has `add_source: true`, so logs will include file names and line numbers.
 
-### Without Source File Information
+### Modifying Configuration
 
-```bash
-cd /home/ruifenglin/app/vcfg/example/logger_demo
-go run main.go config-no-source.yaml
+You can modify the `config.yaml` file to change the logger behavior:
+
+```yaml
+# Set add_source to false to disable source file information
+add_source: false
 ```
 
-This will use `config-no-source.yaml` which has `add_source: false`, so logs will not include source file information.
+Then run the example again to see the difference in log output.
 
 ## Example Output
 
