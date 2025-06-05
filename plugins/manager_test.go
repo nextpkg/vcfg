@@ -421,6 +421,199 @@ func TestPluginManager_Reload(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestNestedConfig represents a nested configuration structure for testing recursive reload
+type TestNestedConfig struct {
+	Database DatabasePlugin `json:"database"`
+	Cache    CacheService   `json:"cache"`
+	Nested   struct {
+		Plugin1 MockConfig `json:"plugin1"`
+		Plugin2 MockConfig `json:"plugin2"`
+	} `json:"nested"`
+}
+
+// TestPluginManager_HandleConfigChangeRecursive tests the recursive config change detection
+func TestPluginManager_HandleConfigChangeRecursive(t *testing.T) {
+	// Clean up registry before test
+	registry := getGlobalPluginRegistry()
+	registry.mu.Lock()
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
+	registry.mu.Unlock()
+
+	manager := NewPluginManager[TestNestedConfig]()
+
+	// Register plugin types
+	RegisterPluginType("mock", &MockPlugin{}, &MockConfig{})
+	RegisterPluginType("database", &MockPlugin{}, &DatabasePlugin{})
+	RegisterPluginType("cache", &MockPlugin{}, &CacheService{})
+	defer func() {
+		UnregisterPluginType("mock")
+		UnregisterPluginType("database")
+		UnregisterPluginType("cache")
+	}()
+
+	oldConfig := &TestNestedConfig{
+		Database: DatabasePlugin{
+			BaseConfig: BaseConfig{Type: "database"},
+			Host:       "localhost",
+			Port:       5432,
+		},
+		Cache: CacheService{
+			BaseConfig: BaseConfig{Type: "cache"},
+			URL:        "redis://localhost:6379",
+		},
+		Nested: struct {
+			Plugin1 MockConfig `json:"plugin1"`
+			Plugin2 MockConfig `json:"plugin2"`
+		}{
+			Plugin1: MockConfig{
+				BaseConfig: BaseConfig{Type: "mock"},
+				Value:      "old1",
+			},
+			Plugin2: MockConfig{
+				BaseConfig: BaseConfig{Type: "mock"},
+				Value:      "old2",
+			},
+		},
+	}
+
+	newConfig := &TestNestedConfig{
+		Database: DatabasePlugin{
+			BaseConfig: BaseConfig{Type: "database"},
+			Host:       "localhost",
+			Port:       5433, // Changed port
+		},
+		Cache: CacheService{
+			BaseConfig: BaseConfig{Type: "cache"},
+			URL:        "redis://localhost:6380", // Changed URL
+		},
+		Nested: struct {
+			Plugin1 MockConfig `json:"plugin1"`
+			Plugin2 MockConfig `json:"plugin2"`
+		}{
+			Plugin1: MockConfig{
+				BaseConfig: BaseConfig{Type: "mock"},
+				Value:      "new1", // Changed value
+			},
+			Plugin2: MockConfig{
+				BaseConfig: BaseConfig{Type: "mock"},
+				Value:      "old2", // Same value
+			},
+		},
+	}
+
+	// Initialize plugins
+	err := manager.DiscoverAndRegister(oldConfig)
+	assert.NoError(t, err)
+
+	// Start all plugins
+	err = manager.Startup(context.Background())
+	assert.NoError(t, err)
+
+	// Test recursive config change detection
+	err = manager.Reload(context.Background(), oldConfig, newConfig)
+	assert.NoError(t, err)
+
+	// Verify that plugins were reloaded (MockPlugin tracks reload calls)
+	manager.mu.RLock()
+	defer manager.mu.RUnlock()
+
+	// Check that the correct plugins were found and processed
+	assert.Len(t, manager.plugins, 4) // database, cache, nested.plugin1, nested.plugin2
+}
+
+// TestPluginManager_ReloadPluginConfig tests the plugin reload logic
+func TestPluginManager_ReloadPluginConfig(t *testing.T) {
+	// Clean up registry before test
+	registry := getGlobalPluginRegistry()
+	registry.mu.Lock()
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
+	registry.mu.Unlock()
+
+	manager := NewPluginManager[SimpleTestConfig]()
+
+	// Register plugin type
+	RegisterPluginType("test", &MockPlugin{}, &MockConfig{})
+	defer UnregisterPluginType("test")
+
+	config := &SimpleTestConfig{
+		TestPlugin: MockConfig{
+			BaseConfig: BaseConfig{Type: "test"},
+			Value:      "test",
+		},
+	}
+
+	// Initialize plugins
+	err := manager.DiscoverAndRegister(config)
+	assert.NoError(t, err)
+
+	// Start plugin
+	err = manager.Startup(context.Background())
+	assert.NoError(t, err)
+
+	// Test reloading existing plugin
+	newConfig := MockConfig{
+		BaseConfig: BaseConfig{Type: "test"},
+		Value:      "new_value",
+	}
+
+	err = manager.reloadPluginConfig(context.Background(), &config.TestPlugin, newConfig, "TestPlugin")
+	assert.NoError(t, err)
+
+	// Test reloading non-existent plugin
+	err = manager.reloadPluginConfig(context.Background(), &config.TestPlugin, newConfig, "NonExistentPlugin")
+	assert.NoError(t, err) // Should not error, just log warning
+}
+
+// TestPluginManager_ReloadWithError tests reload behavior when plugin reload fails
+func TestPluginManager_ReloadWithError(t *testing.T) {
+	// Clean up registry before test
+	registry := getGlobalPluginRegistry()
+	registry.mu.Lock()
+	registry.pluginTypes = make(map[string]*pluginTypeEntry)
+	registry.mu.Unlock()
+
+	manager := NewPluginManager[SimpleTestConfig]()
+
+	// Register normal plugin first, then manually create error plugin
+	RegisterPluginType("test", &MockPlugin{}, &MockConfig{})
+	defer UnregisterPluginType("test")
+
+	oldConfig := &SimpleTestConfig{
+		TestPlugin: MockConfig{
+			BaseConfig: BaseConfig{Type: "test"},
+			Value:      "old",
+		},
+	}
+
+	newConfig := &SimpleTestConfig{
+		TestPlugin: MockConfig{
+			BaseConfig: BaseConfig{Type: "test"},
+			Value:      "new",
+		},
+	}
+
+	// Initialize plugins
+	err := manager.DiscoverAndRegister(oldConfig)
+	assert.NoError(t, err)
+
+	// Start plugin successfully
+	err = manager.Startup(context.Background())
+	assert.NoError(t, err)
+
+	// Manually replace the plugin with error plugin to test reload failure
+	manager.mu.Lock()
+	for key, entry := range manager.plugins {
+		entry.Plugin = &MockPluginWithError{MockPlugin: MockPlugin{started: true}}
+		_ = key // avoid unused variable
+	}
+	manager.mu.Unlock()
+
+	// Test reload with error
+	err = manager.Reload(context.Background(), oldConfig, newConfig)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "reload error")
+}
+
 func TestPluginManager_Clone(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()

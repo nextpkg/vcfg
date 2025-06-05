@@ -4,11 +4,11 @@
 package providers
 
 import (
-	"log/slog"
 	"maps"
 	"strings"
 
 	"github.com/knadh/koanf/v2"
+	"github.com/nextpkg/vcfg/slogs"
 )
 
 // flattenMap recursively flattens nested map structures into a flat map
@@ -76,12 +76,12 @@ func (w *CliProviderWrapper) Read() (map[string]any, error) {
 
 	// Process key mapping, remove command name prefix
 	result := make(map[string]any)
-	slog.Debug("cliProviderWrapper: original data", "data", data)
-	slog.Debug("cliProviderWrapper: cmdName", "cmdName", w.cmdName, "delim", w.delim)
+	slogs.Debug("cliProviderWrapper: original data", "data", data)
+	slogs.Debug("cliProviderWrapper: cmdName", "cmdName", w.cmdName, "delim", w.delim)
 
 	// If delimiter is empty, special handling needed: flatten nested map structure
 	if w.delim == "" {
-		slog.Debug("cliProviderWrapper: empty delimiter, flattening nested structure")
+		slogs.Debug("cliProviderWrapper: empty delimiter, flattening nested structure")
 
 		// Recursively flatten nested map structure
 		flattenMap(data, "", result)
@@ -97,12 +97,12 @@ func (w *CliProviderWrapper) Read() (map[string]any, error) {
 				actualKey := strings.TrimPrefix(key, cmdPrefixPattern)
 				// Remove dot separators to restore original key name
 				actualKey = strings.ReplaceAll(actualKey, ".", "")
-				slog.Debug("cliProviderWrapper: mapping prefixed key", "from", key, "to", actualKey)
+				slogs.Debug("cliProviderWrapper: mapping prefixed key", "from", key, "to", actualKey)
 				finalResult[actualKey] = value
 			}
 		}
 
-		slog.Debug("cliProviderWrapper: empty delimiter result", "result", finalResult)
+		slogs.Debug("cliProviderWrapper: empty delimiter result", "result", finalResult)
 		return finalResult, nil
 	}
 
@@ -110,7 +110,7 @@ func (w *CliProviderWrapper) Read() (map[string]any, error) {
 	if cmdData, exists := data[w.cmdName]; exists {
 		if cmdMap, ok := cmdData.(map[string]any); ok {
 			// Use nested map content directly
-			slog.Debug("cliProviderWrapper: found nested command data", "cmdData", cmdMap)
+			slogs.Debug("cliProviderWrapper: found nested command data", "cmdData", cmdMap)
 			maps.Copy(result, cmdMap)
 		} else {
 			// If not a map, set value directly
@@ -120,23 +120,48 @@ func (w *CliProviderWrapper) Read() (map[string]any, error) {
 
 	// Handle other keys (not starting with command name)
 	prefix := w.cmdName + w.delim
-	for key, value := range data {
-		if key == w.cmdName {
-			// Skip already processed command key
-			continue
+
+	// Special handling for empty command name
+	if w.cmdName == "" {
+		// First pass: handle keys starting with delimiter (higher priority)
+		for key, value := range data {
+			if strings.HasPrefix(key, w.delim) {
+				// Remove leading delimiter
+				newKey := strings.TrimPrefix(key, w.delim)
+				slogs.Debug("cliProviderWrapper: mapping key with empty cmdName", "from", key, "to", newKey)
+				result[newKey] = value
+			}
 		}
-		if strings.HasPrefix(key, prefix) {
-			// Remove command name prefix
-			newKey := strings.TrimPrefix(key, prefix)
-			slog.Debug("cliProviderWrapper: mapping key", "from", key, "to", newKey)
-			result[newKey] = value
-		} else {
-			// Keep original key name
-			slog.Debug("cliProviderWrapper: keeping key", "key", key)
-			result[key] = value
+		// Second pass: handle remaining keys (only if not already processed)
+		for key, value := range data {
+			if !strings.HasPrefix(key, w.delim) {
+				// Only add if not already in result
+				if _, exists := result[key]; !exists {
+					slogs.Debug("cliProviderWrapper: keeping key with empty cmdName", "key", key)
+					result[key] = value
+				}
+			}
+		}
+	} else {
+		// Normal processing for non-empty command name
+		for key, value := range data {
+			if key == w.cmdName {
+				// Skip already processed command key
+				continue
+			}
+			if strings.HasPrefix(key, prefix) {
+				// Remove command name prefix
+				newKey := strings.TrimPrefix(key, prefix)
+				slogs.Debug("cliProviderWrapper: mapping key", "from", key, "to", newKey)
+				result[newKey] = value
+			} else {
+				// Keep original key name
+				slogs.Debug("cliProviderWrapper: keeping key", "key", key)
+				result[key] = value
+			}
 		}
 	}
-	slog.Debug("cliProviderWrapper: result", "result", result)
+	slogs.Debug("cliProviderWrapper: result", "result", result)
 	return result, nil
 }
 

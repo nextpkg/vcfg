@@ -6,7 +6,6 @@ package vcfg
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/knadh/koanf/providers/cliflagv3"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/nextpkg/vcfg/plugins"
 	"github.com/nextpkg/vcfg/providers"
+	"github.com/nextpkg/vcfg/slogs"
 )
 
 // Builder provides a fluent interface for constructing ConfigManager instances.
@@ -78,7 +78,7 @@ func (b *Builder[T]) AddCliFlags(cmd *cli.Command, delim string) *Builder[T] {
 	// Create a wrapped Provider to handle key name mapping
 	cliProvider := providers.NewCliProviderWrapper(cliflagv3.Provider(cmd, delim), cmd.Name, delim)
 
-	slog.Debug("AddCliFlags: created wrapper", "cmd", cmd.Name, "delim", delim)
+	slogs.Debug("AddCliFlags: created wrapper", "cmd", cmd.Name, "delim", delim)
 
 	b.sources = append(b.sources, cliProvider)
 	return b

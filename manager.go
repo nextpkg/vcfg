@@ -6,7 +6,6 @@ package vcfg
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync"
 
 	"github.com/knadh/koanf/v2"
@@ -15,6 +14,7 @@ import (
 	"github.com/nextpkg/vcfg/defaults"
 	"github.com/nextpkg/vcfg/plugins"
 	"github.com/nextpkg/vcfg/providers"
+	"github.com/nextpkg/vcfg/slogs"
 	"github.com/nextpkg/vcfg/validator"
 )
 
@@ -169,11 +169,11 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 			if watcher, ok := providerConfig.Provider.(Watcher); ok {
 				err := watcher.Watch(func(event any, err error) {
 					if err != nil {
-						slog.Error("Watch error", "error", err)
+						slogs.Error("Watch error", "error", err)
 						return
 					}
 
-					slog.Info("Configuration change detected", "event", event)
+					slogs.Debug("Configuration change detected", "event", event)
 
 					// Get old configuration before reload
 					oldConfig := cm.Get()
@@ -181,7 +181,7 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 					// Reload configuration
 					newConfig, loadErr := cm.load()
 					if loadErr != nil {
-						slog.Error("Failed to reload configuration", "error", loadErr)
+						slogs.Error("Failed to reload configuration", "error", loadErr)
 						return
 					}
 
@@ -191,16 +191,16 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 					// Handle plugin configuration changes intelligently
 					if oldConfig != nil {
 						if err := cm.pluginManager.Reload(context.Background(), oldConfig, newConfig); err != nil {
-							slog.Error("Failed to handle smart plugin reload", "error", err)
+							slogs.Error("Failed to handle smart plugin reload", "error", err)
 							return
 						}
 					}
 
-					slog.Info("Configuration reloaded successfully")
+					slogs.Debug("Configuration reloaded successfully")
 				})
 
 				if err != nil {
-					slog.Error("Failed to enable watch", "error", err)
+					slogs.Error("Failed to enable watch", "error", err)
 					continue
 				}
 
@@ -212,7 +212,7 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 					if fileProvider, ok := providerConfig.Provider.(interface{ Unwatch() error }); ok {
 						cm.watchers = append(cm.watchers, func() {
 							if err := fileProvider.Unwatch(); err != nil {
-								slog.Error("Failed to unwatch", "error", err)
+								slogs.Error("Failed to unwatch", "error", err)
 							}
 						})
 					}

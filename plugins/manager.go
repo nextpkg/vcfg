@@ -6,10 +6,11 @@ package plugins
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/nextpkg/vcfg/slogs"
 )
 
 // PluginManager manages plugin instances and their lifecycle for a specific configuration type T.
@@ -40,7 +41,7 @@ func (pm *PluginManager[T]) DiscoverAndRegister(config *T) error {
 
 	pluginTypes := clonePluginTypes()
 	if len(pluginTypes) == 0 {
-		slog.Debug("No plugin types registered for auto-discovery")
+		slogs.Info("No plugin types registered for auto-discovery")
 		return nil
 	}
 
@@ -87,7 +88,7 @@ func (pm *PluginManager[T]) DiscoverAndRegister(config *T) error {
 				if oldConfig, ok := fieldInterface.(Config); ok {
 					pluginType := getConfigType(oldConfig)
 
-					slog.Debug("Found config field",
+					slogs.Debug("Found config field",
 						"path", fieldPath,
 						"type", pluginType,
 						"raw_type", oldConfig.baseConfigEmbedded().Type,
@@ -128,7 +129,7 @@ func (pm *PluginManager[T]) DiscoverAndRegister(config *T) error {
 						started:      false,
 					}
 
-					slog.Debug("Plugin registered",
+					slogs.Debug("Plugin registered",
 						"type", entry.PluginType,
 						"instance", instanceName,
 						"key", pluginKey,
@@ -156,7 +157,7 @@ func (pm *PluginManager[T]) DiscoverAndRegister(config *T) error {
 	}
 
 	if len(pm.plugins) == 0 {
-		slog.Info("No plugins discovered for auto-registration")
+		slogs.Info("No plugins discovered for auto-registration")
 	}
 
 	return nil
@@ -177,14 +178,14 @@ func (pm *PluginManager[T]) Startup(ctx context.Context) error {
 		}
 
 		entry.started = true
-		slog.Info("Plugin started",
+		slogs.Info("Plugin started",
 			"plugin_type", entry.PluginType,
 			"instance", entry.InstanceName,
 			"key", pluginKey,
 		)
 	}
 
-	slog.Debug("All plugins started", "count", len(pm.plugins))
+	slogs.Info("All plugins started", "count", len(pm.plugins))
 
 	return nil
 }
@@ -204,14 +205,14 @@ func (pm *PluginManager[T]) Shutdown(ctx context.Context) error {
 		}
 
 		entry.started = false
-		slog.Info("Plugin stopped",
+		slogs.Info("Plugin stopped",
 			"plugin_type", entry.PluginType,
 			"instance", entry.InstanceName,
 			"key", pluginKey,
 		)
 	}
 
-	slog.Debug("All plugins stopped", "count", len(pm.plugins))
+	slogs.Info("All plugins stopped", "count", len(pm.plugins))
 
 	return nil
 }
@@ -264,7 +265,7 @@ func (pm *PluginManager[T]) handleConfigChangeRecursive(ctx context.Context, old
 	for i := range oldValue.NumField() {
 		fieldType := oldType.Field(i)
 
-		slog.Debug("Processing field", "name", fieldType.Name, "path", fieldPath)
+		slogs.Debug("Processing field", "name", fieldType.Name, "path", fieldPath)
 
 		vOldField := oldValue.Field(i)
 		vNewField := newValue.Field(i)
@@ -314,21 +315,21 @@ func (pm *PluginManager[T]) reloadPluginConfig(ctx context.Context, config Confi
 	instanceName := strings.ToLower(fieldPath)
 	pluginKey := getPluginKey(pluginType, instanceName)
 
-	slog.Info("Smart config change detected",
+	slogs.Info("Smart config change detected",
 		"field", fieldPath,
 		"plugin_type", pluginType,
 		"instance", instanceName,
 		"key", pluginKey,
 	)
 
-	// Debug: List all registered plugins
 	pm.mu.RLock()
-	slog.Info("Searching for plugin",
+	slogs.Debug("Searching for plugin",
 		"target_key", pluginKey,
 		"total_registered", len(pm.plugins),
 	)
+
 	for key, entry := range pm.plugins {
-		slog.Debug("Registered plugin",
+		slogs.Debug("Registered plugin",
 			"key", key,
 			"type", entry.PluginType,
 			"instance", entry.InstanceName,
@@ -342,10 +343,11 @@ func (pm *PluginManager[T]) reloadPluginConfig(ctx context.Context, config Confi
 	pm.mu.RUnlock()
 
 	if exists {
-		slog.Info("Plugin found", "key", pluginKey, "started", entry.started)
+		slogs.Debug("Plugin found", "key", pluginKey, "started", entry.started)
+
 		if entry.started {
 			// Reload registered plugin
-			slog.Info("Reloading plugin", "key", pluginKey)
+			slogs.Debug("Reloading plugin", "key", pluginKey)
 			if err := entry.Plugin.Reload(ctx, newConfig); err != nil {
 				return fmt.Errorf("smart plugin reload failed, key=%s, err=%w", pluginKey, err)
 			}
@@ -354,12 +356,12 @@ func (pm *PluginManager[T]) reloadPluginConfig(ctx context.Context, config Confi
 			if newCfg, ok := newConfig.(Config); ok {
 				entry.Config = newCfg
 			}
-			slog.Info("Plugin reloaded successfully", "key", pluginKey)
+			slogs.Debug("Plugin reloaded successfully", "key", pluginKey)
 		} else {
-			slog.Warn("Plugin found but not started", "key", pluginKey)
+			slogs.Warn("Plugin found but not started", "key", pluginKey)
 		}
 	} else {
-		slog.Warn("Plugin not found in registry", "key", pluginKey)
+		slogs.Warn("Plugin not found in registry", "key", pluginKey)
 	}
 
 	return nil

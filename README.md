@@ -20,6 +20,7 @@ VCFG is a powerful and flexible configuration management library for Go applicat
 - **Extensible Architecture**: Plugin-based architecture for extending functionality
 - **Built-in Plugins**: Logger plugin with advanced features (rotation, multiple outputs, structured logging)
 - **Plugin Lifecycle Management**: Automatic plugin discovery, initialization, and cleanup
+- **Hot Reload Support**: Automatic plugin reloading when configuration changes are detected
 - **Custom Plugins**: Easy creation of custom plugins with well-defined interfaces
 
 ### Advanced Features
@@ -303,6 +304,35 @@ if err != nil {
 cm := vcfg.MustLoad[Config]("config.yaml")
 ```
 
+## Plugin Hot Reload
+
+VCFG supports automatic plugin reloading when configuration changes are detected:
+
+```go
+type AppConfig struct {
+    Database DatabaseConfig `json:"database"`
+    Cache    CacheConfig   `json:"cache"`
+    // Nested plugin configurations are also supported
+    Services struct {
+        Auth    AuthConfig    `json:"auth"`
+        Payment PaymentConfig `json:"payment"`
+    } `json:"services"`
+}
+
+// When any plugin configuration changes, the corresponding plugin
+// will be automatically reloaded without affecting other plugins
+cm, err := vcfg.NewBuilder[AppConfig]().
+    AddFile("config.yaml").
+    WithWatch(). // Enable file watching for hot reload
+    Build(context.Background())
+```
+
+**Key Features:**
+- **Recursive Detection**: Automatically detects changes in nested plugin configurations
+- **Selective Reload**: Only reloads plugins whose configurations have actually changed
+- **Error Handling**: Continues processing other plugins even if one plugin reload fails
+- **Thread-Safe**: All reload operations are thread-safe and non-blocking
+
 ## Best Practices
 
 1. **Use struct tags**: Always define `json`, `yaml`, `default`, and `validate` tags
@@ -311,6 +341,7 @@ cm := vcfg.MustLoad[Config]("config.yaml")
 4. **Validate configuration**: Use validation tags to ensure configuration integrity
 5. **Use plugins wisely**: Leverage the plugin system for cross-cutting concerns
 6. **Environment-specific configs**: Use multiple configuration files for different environments
+7. **Plugin hot reload**: Implement proper `Reload` methods in custom plugins to support hot reloading
 
 ## Examples
 

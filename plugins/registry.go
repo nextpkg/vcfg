@@ -5,10 +5,11 @@ package plugins
 
 import (
 	"fmt"
-	"log/slog"
 	"maps"
 	"reflect"
 	"sync"
+
+	"github.com/nextpkg/vcfg/slogs"
 )
 
 var (
@@ -85,7 +86,7 @@ func RegisterPluginType[P PluginPtr[PT], C ConfigPtr[CT], PT any, CT any](plugin
 		AutoDiscover:  autoDiscover,
 	}
 
-	slog.Info("Plugin type registered", "PluginType", pluginType, "auto_discover", autoDiscover)
+	slogs.Info("Plugin type registered", "PluginType", pluginType, "auto_discover", autoDiscover)
 }
 
 // ListPluginTypes returns a list of all registered plugin type names
@@ -108,7 +109,7 @@ func UnregisterPluginType(pluginType string) {
 	defer registry.mu.Unlock()
 
 	delete(registry.pluginTypes, pluginType)
-	slog.Info("Plugin type unregistered", "type", pluginType)
+	slogs.Info("Plugin type unregistered", "type", pluginType)
 }
 
 func clonePluginTypes() map[string]*pluginTypeEntry {

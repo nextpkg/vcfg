@@ -314,7 +314,7 @@ func (p *LoggerPlugin) createRotatingFileWriter() (io.Writer, error) {
 
 	// Check if file already exists to determine if it's a new file
 	fileExists := true
-	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+	if _, err = os.Stat(logPath); os.IsNotExist(err) {
 		fileExists = false
 	}
 
@@ -359,7 +359,7 @@ func (rw *rotatingWriter) Write(p []byte) (n int, err error) {
 
 	// Check if rotation is needed
 	if rw.plugin.needsRotation() {
-		if err := rw.plugin.rotateFile(); err != nil {
+		if err = rw.plugin.rotateFile(); err != nil {
 			return 0, fmt.Errorf("failed to rotate log file: %w", err)
 		}
 		// Update file reference after rotation
