@@ -226,7 +226,8 @@ func (pm *PluginManager[T]) Reload(ctx context.Context, oldConfig, newConfig *T)
 	pm.mu.RLock()
 	if len(pm.plugins) == 0 {
 		pm.mu.RUnlock()
-		return fmt.Errorf("no plugins registered, cannot reload plugins")
+		slogs.Debug("No plugins registered, cannot reload plugins")
+		return nil
 	}
 	pm.mu.RUnlock()
 

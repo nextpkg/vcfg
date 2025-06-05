@@ -1,8 +1,8 @@
 server:
   host: "127.0.0.1"
-  port: 9091
+  port: 9090
 
 database:
   host: "127.0.0.1"
-  port: 5432
+  port: 5434
   name: "newdemo"
