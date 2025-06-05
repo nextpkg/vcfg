@@ -1,3 +1,6 @@
+// Package plugins provides a comprehensive plugin management system that supports
+// automatic discovery, registration, and lifecycle management of plugins.
+// This file implements the PluginManager which handles plugin instances and their configurations.
 package plugins
 
 import (
@@ -9,11 +12,19 @@ import (
 	"sync"
 )
 
+// PluginManager manages plugin instances and their lifecycle for a specific configuration type T.
+// It provides thread-safe operations for plugin discovery, registration, initialization,
+// and cleanup. The manager uses a map to store plugin entries with composite keys.
 type PluginManager[T any] struct {
-	mu      sync.RWMutex
-	plugins map[string]*PluginEntry // // key: pluginType:instanceName
+	// mu protects concurrent access to the plugins map
+	mu sync.RWMutex
+	// plugins stores plugin entries indexed by "pluginType:instanceName" keys
+	plugins map[string]*PluginEntry
 }
 
+// NewPluginManager creates a new plugin manager instance for configuration type T.
+// The manager is initialized with an empty plugin registry and is ready to
+// discover and manage plugin instances.
 func NewPluginManager[T any]() *PluginManager[T] {
 	return &PluginManager[T]{
 		plugins: make(map[string]*PluginEntry),

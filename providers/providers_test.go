@@ -109,3 +109,30 @@ func TestProviderFactory_CreateProviders_MixedSources(t *testing.T) {
 	assert.Equal(t, fileProvider, configs[2].Provider)
 	assert.IsType(t, json.Parser(), configs[2].Parser)
 }
+
+func TestProviderFactory_AutoDetection(t *testing.T) {
+	factory := NewProviderFactory()
+
+	// Test auto-detection with different provider types
+	envProvider := env.ProviderWithValue("TEST_", ".", func(s string, v string) (string, any) {
+		return s, v
+	})
+	fileProvider := file.Provider("nonexistent.json")
+	customProvider := NewCustomJSONProvider([]byte(`{"test": true}`))
+
+	configs, err := factory.CreateProviders(envProvider, fileProvider, customProvider)
+	require.NoError(t, err)
+	require.Len(t, configs, 3)
+
+	// Env provider should have nil parser (self-parsing)
+	assert.Equal(t, envProvider, configs[0].Provider)
+	assert.Nil(t, configs[0].Parser)
+
+	// File provider should have JSON parser (needs parsing)
+	assert.Equal(t, fileProvider, configs[1].Provider)
+	assert.IsType(t, json.Parser(), configs[1].Parser)
+
+	// Custom provider should use its required parser
+	assert.Equal(t, customProvider, configs[2].Provider)
+	assert.IsType(t, json.Parser(), configs[2].Parser)
+}

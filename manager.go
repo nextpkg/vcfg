@@ -1,3 +1,6 @@
+// Package vcfg provides configuration management capabilities.
+// This file implements the core ConfigManager that handles configuration loading,
+// validation, watching, and plugin management with thread-safe operations.
 package vcfg
 
 import (
@@ -16,37 +19,57 @@ import (
 )
 
 type (
-	// ConfigManager is a configuration manager that handles loading, validation, and watching.
-	// It supports generic configuration types through the type parameter T.
-	// ConfigManager provides thread-safe access to configuration values.
+	// ConfigManager is the core configuration manager that handles loading, validation,
+	// watching, and plugin management. It supports generic configuration types through
+	// the type parameter T and provides thread-safe access to configuration values.
+	//
+	// The manager coordinates multiple configuration sources, automatically detects
+	// file formats, validates configurations, and manages plugin lifecycles.
 	ConfigManager[T any] struct {
-		providers     []providers.ProviderConfig
-		koanf         *koanf.Koanf
-		once          sync.Once
-		cfg           atomic.Value
-		mu            sync.RWMutex
-		watchers      []func() // cleanup functions for watchers
+		// providers holds the configuration sources and their associated parsers
+		providers []providers.ProviderConfig
+		// koanf is the underlying configuration library instance
+		koanf *koanf.Koanf
+		// once ensures one-time initialization operations
+		once sync.Once
+		// cfg stores the current configuration using atomic operations for thread safety
+		cfg atomic.Value
+		// mu protects concurrent access to manager state
+		mu sync.RWMutex
+		// watchers holds cleanup functions for active file watchers
+		watchers []func()
+		// pluginManager manages plugin discovery, initialization, and lifecycle
 		pluginManager *plugins.PluginManager[T]
 	}
 
-	// Watcher interface for providers that support watching configuration changes
+	// Watcher interface defines the contract for providers that support
+	// watching configuration changes and notifying about updates.
 	Watcher interface {
+		// Watch starts watching for configuration changes and calls the callback
+		// when changes occur or errors happen
 		Watch(cb func(event any, err error)) error
 	}
 
-	// Unwatcher interface for providers that support stopping watch
+	// Unwatcher interface defines the contract for providers that support
+	// stopping the watch operation and cleaning up resources.
 	Unwatcher interface {
+		// Unwatch stops watching for configuration changes
 		Unwatch()
 	}
 )
 
 // newManager creates a new configuration manager with the provided sources.
-// It accepts file paths and koanf.Provider instances.
-// Parameters:
-//   - sources: file paths (strings) or koanf.Provider instances
+// It accepts both file paths (strings) and koanf.Provider instances, automatically
+// detecting the appropriate parsers for each source.
 //
-// Returns:
-//   - A new ConfigManager instance.
+// Type parameter:
+//   - T: The configuration struct type to manage
+//
+// Parameters:
+//   - sources: Variable number of configuration sources (file paths or koanf.Provider instances)
+//
+// Returns a new ConfigManager instance ready for configuration loading.
+// Panics if provider creation fails.
 func newManager[T any](sources ...any) *ConfigManager[T] {
 	factory := providers.NewProviderFactory()
 	providerConfigs, err := factory.CreateProviders(sources...)
@@ -62,11 +85,16 @@ func newManager[T any](sources ...any) *ConfigManager[T] {
 	}
 }
 
-// load loads configuration from sources, validates it, and returns the configuration struct.
-// This method is thread-safe through mutex locking.
-// Returns:
-//   - A pointer to the loaded and validated configuration.
-//   - An error if loading or validation fails.
+// load loads configuration from all sources, applies defaults, validates the result,
+// and returns the configuration struct. This method is thread-safe through mutex locking.
+//
+// The loading process:
+// 1. Loads and merges all configuration sources
+// 2. Unmarshals into the target struct type
+// 3. Applies default values
+// 4. Validates the configuration
+//
+// Returns a pointer to the loaded and validated configuration, or an error if any step fails.
 func (cm *ConfigManager[T]) load() (*T, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -80,10 +108,11 @@ func (cm *ConfigManager[T]) load() (*T, error) {
 	return cm.loadConfig()
 }
 
-// loadSource loads all configuration providers and merges them into koanf.
-// It reads from each provider and combines the configurations.
-// Returns:
-//   - An error if reading from any provider or merging configurations fails.
+// loadSource loads all configuration providers and merges them into the koanf instance.
+// Providers are loaded in order, with later providers overriding earlier ones.
+// Each provider is loaded with its associated parser for proper data interpretation.
+//
+// Returns an error if reading from any provider or merging configurations fails.
 func (cm *ConfigManager[T]) loadSource() error {
 	for _, providerConfig := range cm.providers {
 		if err := cm.koanf.Load(providerConfig.Provider, providerConfig.Parser); err != nil {
@@ -94,10 +123,15 @@ func (cm *ConfigManager[T]) loadSource() error {
 	return nil
 }
 
-// loadConfig unmarshals the configuration from koanf into a struct and validates it.
-// Returns:
-//   - A pointer to the unmarshaled and validated configuration.
-//   - An error if unmarshaling or validation fails.
+// loadConfig unmarshals the merged configuration from koanf into the target struct type,
+// applies default values, and validates the result.
+//
+// The process includes:
+// 1. Unmarshaling the configuration into struct T
+// 2. Applying default values to unset fields
+// 3. Running validation on the final configuration
+//
+// Returns a pointer to the processed configuration, or an error if any step fails.
 func (cm *ConfigManager[T]) loadConfig() (*T, error) {
 	if cm == nil || cm.koanf == nil {
 		return nil, NewParseError("manager", "configuration manager not properly initialized", nil)
@@ -268,9 +302,9 @@ func (cm *ConfigManager[T]) CloseWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	// 停止所有监听器
+	// Stop all watchers
 	cm.DisableWatch()
 
-	// 关闭所有插件
+	// Shutdown all plugins
 	return cm.pluginManager.Shutdown(ctx)
 }

@@ -1,3 +1,6 @@
+// Package providers contains custom provider implementations and wrappers
+// for the koanf configuration library. This file implements a CLI provider
+// wrapper that handles key name mapping and flattening for command-line arguments.
 package providers
 
 import (
@@ -8,7 +11,14 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// flattenMap 递归扁平化嵌套的map结构
+// flattenMap recursively flattens nested map structures into a flat map
+// with dot-separated keys. This is useful for converting hierarchical
+// configuration data into a format suitable for command-line processing.
+//
+// Parameters:
+//   - data: The nested map to flatten
+//   - prefix: The current key prefix for nested levels
+//   - result: The output map to store flattened key-value pairs
 func flattenMap(data map[string]any, prefix string, result map[string]any) {
 	for key, value := range data {
 		fullKey := key
@@ -17,23 +27,36 @@ func flattenMap(data map[string]any, prefix string, result map[string]any) {
 		}
 
 		if nestedMap, ok := value.(map[string]any); ok {
-			// 递归处理嵌套的map
+			// Recursively handle nested maps
 			flattenMap(nestedMap, fullKey, result)
 		} else {
-			// 叶子节点，直接设置值
+			// Leaf node, set value directly
 			result[fullKey] = value
 		}
 	}
 }
 
-// CliProviderWrapper 包装 cliflagv3.Provider 来处理键名映射
+// CliProviderWrapper wraps a CLI provider to handle key name mapping and transformation.
+// It processes command-line arguments and converts them into a format compatible
+// with the configuration structure, including flattening nested maps and
+// applying key transformations.
 type CliProviderWrapper struct {
+	// original is the underlying CLI provider being wrapped
 	original koanf.Provider
-	cmdName  string
-	delim    string
+	// cmdName is the command name used for logging and identification
+	cmdName string
+	// delim is the delimiter used for key separation in nested structures
+	delim string
 }
 
-// NewCliProviderWrapper 创建一个新的 CLI provider wrapper
+// NewCliProviderWrapper creates a new CLI provider wrapper with the specified parameters.
+//
+// Parameters:
+//   - original: The underlying koanf.Provider to wrap
+//   - cmdName: The command name for logging and identification purposes
+//   - delim: The delimiter to use for key separation (typically ".")
+//
+// Returns a configured CliProviderWrapper ready for use.
 func NewCliProviderWrapper(original koanf.Provider, cmdName, delim string) *CliProviderWrapper {
 	return &CliProviderWrapper{
 		original: original,
@@ -42,35 +65,37 @@ func NewCliProviderWrapper(original koanf.Provider, cmdName, delim string) *CliP
 	}
 }
 
-// Read 实现 koanf.Provider 接口
+// Read implements the koanf.Provider interface by reading data from the wrapped provider,
+// processing it through key transformations, and flattening nested structures.
+// It handles the conversion of CLI arguments into a standardized configuration format.
 func (w *CliProviderWrapper) Read() (map[string]any, error) {
 	data, err := w.original.Read()
 	if err != nil {
 		return nil, err
 	}
 
-	// 处理键名映射，移除命令名前缀
+	// Process key mapping, remove command name prefix
 	result := make(map[string]any)
 	slog.Debug("cliProviderWrapper: original data", "data", data)
 	slog.Debug("cliProviderWrapper: cmdName", "cmdName", w.cmdName, "delim", w.delim)
 
-	// 如果分隔符为空，需要特殊处理：扁平化嵌套的map结构
+	// If delimiter is empty, special handling needed: flatten nested map structure
 	if w.delim == "" {
 		slog.Debug("cliProviderWrapper: empty delimiter, flattening nested structure")
 
-		// 递归扁平化嵌套的map结构
+		// Recursively flatten nested map structure
 		flattenMap(data, "", result)
 
-		// 移除命令名前缀的键，只保留实际的配置键
-		// 扁平化后的键格式是: c.l.i.-.d.e.m.o.配置名
+		// Remove command name prefix keys, keep only actual config keys
+		// Flattened key format: c.l.i.-.d.e.m.o.configName
 		cmdPrefixPattern := strings.Join(strings.Split(w.cmdName, ""), ".") + "."
 
 		finalResult := make(map[string]any)
 		for key, value := range result {
 			if strings.HasPrefix(key, cmdPrefixPattern) {
-				// 移除命令名前缀，得到实际的配置键名
+				// Remove command name prefix to get actual config key name
 				actualKey := strings.TrimPrefix(key, cmdPrefixPattern)
-				// 移除点分隔符，恢复原始键名
+				// Remove dot separators to restore original key name
 				actualKey = strings.ReplaceAll(actualKey, ".", "")
 				slog.Debug("cliProviderWrapper: mapping prefixed key", "from", key, "to", actualKey)
 				finalResult[actualKey] = value
@@ -81,32 +106,32 @@ func (w *CliProviderWrapper) Read() (map[string]any, error) {
 		return finalResult, nil
 	}
 
-	// 检查是否有以命令名为键的嵌套 map
+	// Check if there's a nested map with command name as key
 	if cmdData, exists := data[w.cmdName]; exists {
 		if cmdMap, ok := cmdData.(map[string]any); ok {
-			// 直接使用嵌套 map 的内容
+			// Use nested map content directly
 			slog.Debug("cliProviderWrapper: found nested command data", "cmdData", cmdMap)
 			maps.Copy(result, cmdMap)
 		} else {
-			// 如果不是 map，直接设置值
+			// If not a map, set value directly
 			result[w.cmdName] = cmdData
 		}
 	}
 
-	// 处理其他键（不以命令名开头的）
+	// Handle other keys (not starting with command name)
 	prefix := w.cmdName + w.delim
 	for key, value := range data {
 		if key == w.cmdName {
-			// 跳过已处理的命令键
+			// Skip already processed command key
 			continue
 		}
 		if strings.HasPrefix(key, prefix) {
-			// 移除命令名前缀
+			// Remove command name prefix
 			newKey := strings.TrimPrefix(key, prefix)
 			slog.Debug("cliProviderWrapper: mapping key", "from", key, "to", newKey)
 			result[newKey] = value
 		} else {
-			// 保持原键名
+			// Keep original key name
 			slog.Debug("cliProviderWrapper: keeping key", "key", key)
 			result[key] = value
 		}
@@ -115,7 +140,7 @@ func (w *CliProviderWrapper) Read() (map[string]any, error) {
 	return result, nil
 }
 
-// ReadBytes 实现 koanf.Provider 接口
+// ReadBytes implements the koanf.Provider interface
 func (w *CliProviderWrapper) ReadBytes() ([]byte, error) {
 	return w.original.ReadBytes()
 }

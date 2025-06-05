@@ -1,3 +1,6 @@
+// Package plugins provides utility functions for plugin management and configuration handling.
+// This file contains helper functions for plugin key generation, field path handling,
+// configuration type detection, and reflection-based operations.
 package plugins
 
 import (
@@ -6,8 +9,10 @@ import (
 	"strings"
 )
 
-// key generates a composite key for plugin registration
-// Format: pluginType:instanceName
+// getPluginKey generates a composite key for plugin registration.
+// The key format is "pluginType:instanceName" for named instances,
+// or just "pluginType" for default instances.
+// This key is used to uniquely identify plugin instances in the registry.
 func getPluginKey(pluginType, instanceName string) string {
 	if instanceName == "" {
 		return pluginType
@@ -16,7 +21,9 @@ func getPluginKey(pluginType, instanceName string) string {
 	return strings.Join([]string{pluginType, instanceName}, ":")
 }
 
-// getFieldPath returns the instance ID for a given field path
+// getFieldPath constructs a hierarchical field path by joining the current path
+// with the field name using dot notation. This is used to track nested configuration
+// structures during plugin discovery and registration.
 func getFieldPath(currentPath, fieldName string) string {
 	// Build current field path
 	if currentPath != "" && fieldName != "" {
@@ -26,6 +33,11 @@ func getFieldPath(currentPath, fieldName string) string {
 	return fieldName
 }
 
+// getConfigType extracts the plugin type from a configuration object.
+// It first checks if the config has an embedded BaseConfig with a Type field.
+// If not found, it derives the type from the struct name by removing common suffixes
+// like "plugin", "config", "impl", "service", "cfg", "configuration".
+// The result is converted to lowercase for consistency.
 func getConfigType[T Config](v T) string {
 	// Get plugin type from config
 	var pluginType string
@@ -55,7 +67,9 @@ func getConfigType[T Config](v T) string {
 	return pluginType
 }
 
-// toInterface extracts config interface from field values
+// toInterface safely extracts an interface{} value from a reflect.Value.
+// It returns the address of the value if it's addressable, otherwise returns
+// the value itself. This is used during reflection-based configuration processing.
 func toInterface(fieldValue reflect.Value) any {
 	if fieldValue.CanAddr() {
 		return fieldValue.Addr().Interface()
@@ -63,7 +77,10 @@ func toInterface(fieldValue reflect.Value) any {
 	return fieldValue.Interface()
 }
 
-// copyConfig copies configuration values from src to dst using reflection
+// copyConfig performs a deep copy of configuration values from src to dst using reflection.
+// Both src and dst must be of the same Config type. The function handles pointer types
+// and validates that both values are valid struct types before copying.
+// This is used to clone configuration objects during plugin initialization.
 func copyConfig[T Config](src, dst T) error {
 	srcValue := reflect.ValueOf(src)
 	dstValue := reflect.ValueOf(dst)

@@ -1,3 +1,6 @@
+// Package vcfg provides configuration management with comprehensive error handling.
+// This file defines error types and structures for detailed error reporting
+// across different configuration operations.
 package vcfg
 
 import (
@@ -5,20 +8,31 @@ import (
 	"strings"
 )
 
-// ErrorType 错误类型枚举
+// ErrorType represents the category of configuration errors.
+// It provides a way to classify different types of failures that can occur
+// during configuration loading, parsing, validation, and management.
 type ErrorType int
 
 const (
+	// ErrorTypeUnknown represents an unclassified error
 	ErrorTypeUnknown ErrorType = iota
+	// ErrorTypeFileNotFound indicates a configuration file could not be found
 	ErrorTypeFileNotFound
+	// ErrorTypeParseFailure indicates failure to parse configuration data
 	ErrorTypeParseFailure
+	// ErrorTypeValidationFailure indicates configuration validation failed
 	ErrorTypeValidationFailure
+	// ErrorTypeWatchFailure indicates failure in file watching functionality
 	ErrorTypeWatchFailure
+	// ErrorTypePluginFailure indicates failure in plugin operations
 	ErrorTypePluginFailure
+	// ErrorTypeMergeFailure indicates failure to merge configuration sources
 	ErrorTypeMergeFailure
 )
 
-// String 返回错误类型的字符串表示
+// String returns the string representation of the error type.
+// This method implements the Stringer interface for better error reporting
+// and debugging purposes.
 func (et ErrorType) String() string {
 	switch et {
 	case ErrorTypeFileNotFound:
@@ -38,15 +52,23 @@ func (et ErrorType) String() string {
 	}
 }
 
-// ConfigError 配置错误结构
+// ConfigError represents a structured configuration error with detailed context.
+// It provides information about the error type, source, descriptive message,
+// and the underlying cause for comprehensive error reporting.
 type ConfigError struct {
-	Type    ErrorType
-	Source  string
+	// Type categorizes the kind of error that occurred
+	Type ErrorType
+	// Source identifies where the error originated (file path, provider name, etc.)
+	Source string
+	// Message provides a human-readable description of the error
 	Message string
-	Cause   error
+	// Cause holds the underlying error that triggered this configuration error
+	Cause error
 }
 
-// Error 实现 error 接口
+// Error implements the error interface by returning a formatted error message.
+// The message includes the error type, source, and descriptive text for
+// comprehensive error reporting.
 func (e *ConfigError) Error() string {
 	var parts []string
 
@@ -94,7 +116,7 @@ func NewConfigError(errType ErrorType, source, message string, cause error) *Con
 	}
 }
 
-// 便捷的错误创建函数
+// Convenience functions for creating errors
 
 // NewParseError 创建解析错误
 func NewParseError(source, message string, cause error) *ConfigError {

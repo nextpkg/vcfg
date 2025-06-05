@@ -1,3 +1,6 @@
+// Package builtins provides built-in plugins for the vcfg configuration system.
+// This file implements a comprehensive logger plugin that supports multiple output
+// formats, destinations, and log levels with structured logging capabilities.
 package builtins
 
 import (
@@ -13,32 +16,51 @@ import (
 	"github.com/nextpkg/vcfg/plugins"
 )
 
-// LoggerConfig represents the configuration for the logger plugin
+// LoggerConfig represents the configuration for the logger plugin.
+// It defines all configurable aspects of the logging behavior including
+// output format, destination, log level, and additional options.
 type LoggerConfig struct {
+	// BaseConfig embeds the common plugin configuration
 	plugins.BaseConfig `koanf:",squash"`
-	Level              string `koanf:"level" default:"info"`          // log level: debug, info, warn, error
-	Format             string `koanf:"format" default:"json"`         // log format: json, text
-	Output             string `koanf:"output" default:"stdout"`       // output: stdout, stderr, file, both
-	FilePath           string `koanf:"file_path" default:"./app.log"` // log file path
-	AddSource          bool   `koanf:"add_source" default:"false"`    // whether to add source file info
+	// Level sets the minimum log level (debug, info, warn, error)
+	Level string `koanf:"level" default:"info"`
+	// Format specifies the log output format (json, text)
+	Format string `koanf:"format" default:"json"`
+	// Output determines where logs are written (stdout, stderr, file, both)
+	Output string `koanf:"output" default:"stdout"`
+	// FilePath specifies the log file path when output includes file
+	FilePath string `koanf:"file_path" default:"./app.log"`
+	// AddSource includes source file information in log entries
+	AddSource bool `koanf:"add_source" default:"false"`
 }
 
-// LoggerPlugin implements the logger plugin
+// LoggerPlugin implements the logger plugin that provides structured logging
+// capabilities with configurable output formats and destinations.
 type LoggerPlugin struct {
-	mu     sync.RWMutex
+	// mu protects concurrent access to plugin state
+	mu sync.RWMutex
+	// logger is the configured slog.Logger instance
 	logger *slog.Logger
-	file   *os.File
+	// file holds the log file handle when file output is enabled
+	file *os.File
+	// config stores the current plugin configuration
 	config *LoggerConfig
 }
 
-// globalLogger holds the global logger instance
+// Global logger state management
 var (
+	// globalLogger holds the current global logger instance
 	globalLogger *slog.Logger
-	globalMu     sync.RWMutex
+	// globalMu protects concurrent access to the global logger
+	globalMu sync.RWMutex
 )
 
-// GetLogger returns the global logger instance
-// GetLogger returns the current global logger instance for application use
+// GetLogger returns the current global logger instance for application use.
+// If no logger has been configured, it returns the default slog logger.
+// This function is thread-safe and can be called from multiple goroutines.
+//
+// Returns:
+//   - *slog.Logger: The current global logger or default logger if none is set
 func GetLogger() *slog.Logger {
 	globalMu.RLock()
 	defer globalMu.RUnlock()
@@ -48,7 +70,12 @@ func GetLogger() *slog.Logger {
 	return globalLogger
 }
 
-// setGlobalLogger sets the global logger instance
+// setGlobalLogger sets the global logger instance and updates the default slog logger.
+// This function is used internally by the logger plugin to make the configured
+// logger available globally throughout the application.
+//
+// Parameters:
+//   - logger: The slog.Logger instance to set as global
 func setGlobalLogger(logger *slog.Logger) {
 	globalMu.Lock()
 	defer globalMu.Unlock()
@@ -56,8 +83,16 @@ func setGlobalLogger(logger *slog.Logger) {
 	slog.SetDefault(logger)
 }
 
-// Startup implements plugins.Plugin interface
-// Startup initializes the logger plugin with the provided configuration
+// Startup implements the plugins.Plugin interface by initializing the logger
+// with the provided configuration. It sets up the log level, format, output
+// destination, and creates the appropriate handlers.
+//
+// Parameters:
+//   - ctx: Context for the startup operation
+//   - config: LoggerConfig instance containing the logger configuration
+//
+// Returns:
+//   - error: An error if initialization fails, nil otherwise
 func (p *LoggerPlugin) Startup(ctx context.Context, config any) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -113,8 +148,16 @@ func (p *LoggerPlugin) Startup(ctx context.Context, config any) error {
 	return nil
 }
 
-// Reload implements plugins.Plugin interface
-// Reload reloads the logger plugin with new configuration
+// Reload implements the plugins.Plugin interface by reloading the logger
+// with new configuration. It gracefully shuts down the current logger
+// and reinitializes it with the new settings.
+//
+// Parameters:
+//   - ctx: Context for the reload operation
+//   - config: New LoggerConfig instance
+//
+// Returns:
+//   - error: An error if reload fails, nil otherwise
 func (p *LoggerPlugin) Reload(ctx context.Context, config any) error {
 	p.logger.Info("Reloading logger plugin")
 
@@ -127,8 +170,14 @@ func (p *LoggerPlugin) Reload(ctx context.Context, config any) error {
 	return p.Startup(ctx, config)
 }
 
-// Shutdown implements plugins.Plugin interface
-// Shutdown gracefully shuts down the logger plugin
+// Shutdown implements the plugins.Plugin interface by gracefully shutting down
+// the logger plugin. It closes any open file handles and cleans up resources.
+//
+// Parameters:
+//   - ctx: Context for the shutdown operation
+//
+// Returns:
+//   - error: An error if shutdown fails, nil otherwise
 func (p *LoggerPlugin) Shutdown(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -151,7 +200,12 @@ func (p *LoggerPlugin) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// createWriter creates the appropriate writer based on output configuration
+// createWriter creates the appropriate io.Writer based on the output configuration.
+// It supports stdout, stderr, file, and both (stdout + file) output modes.
+//
+// Returns:
+//   - io.Writer: The configured writer for log output
+//   - error: An error if writer creation fails, nil otherwise
 func (p *LoggerPlugin) createWriter() (io.Writer, error) {
 	switch strings.ToLower(p.config.Output) {
 	case "stdout":
@@ -171,7 +225,12 @@ func (p *LoggerPlugin) createWriter() (io.Writer, error) {
 	}
 }
 
-// createFileWriter creates a file writer with rotation support
+// createFileWriter creates a file writer for log output. It ensures the
+// log directory exists and opens the file with appropriate permissions.
+//
+// Returns:
+//   - io.Writer: The file writer for log output
+//   - error: An error if file creation fails, nil otherwise
 func (p *LoggerPlugin) createFileWriter() (io.Writer, error) {
 	// Ensure directory exists
 	dir := filepath.Dir(p.config.FilePath)
@@ -189,7 +248,15 @@ func (p *LoggerPlugin) createFileWriter() (io.Writer, error) {
 	return file, nil
 }
 
-// parseLogLevel parses string log level to slog.Level
+// parseLogLevel parses a string log level into the corresponding slog.Level.
+// It supports debug, info, warn/warning, and error levels (case-insensitive).
+//
+// Parameters:
+//   - level: String representation of the log level
+//
+// Returns:
+//   - slog.Level: The parsed log level
+//   - error: An error if the level is invalid, nil otherwise
 func parseLogLevel(level string) (slog.Level, error) {
 	if level == "" {
 		return slog.LevelInfo, nil

@@ -48,13 +48,13 @@ type Config struct {
 func main() {
     config := &Config{}
     
-    // 设置默认值
-    if err := defaults.SetDefaults(config); err != nil {
-        panic(err)
-    }
-    
-    fmt.Printf("%+v\n", config)
-    // 输出: &{Name:my-app Port:8080 Debug:true Timeout:30s Tags:[web api service] Optional:0xc000010240}
+    // Set default values
+	if err := defaults.SetDefaults(&config); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("%+v\n", config)
+	// Output: &{Name:my-app Port:8080 Debug:true Timeout:30s Tags:[web api service] Optional:0xc000010240}
 }
 ```
 

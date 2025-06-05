@@ -1,3 +1,6 @@
+// Package vcfg provides a flexible configuration management system.
+// This file implements the Builder pattern for constructing ConfigManager instances
+// with various configuration sources and options.
 package vcfg
 
 import (
@@ -14,15 +17,22 @@ import (
 	"github.com/nextpkg/vcfg/providers"
 )
 
-// Builder 配置管理器构建器
+// Builder provides a fluent interface for constructing ConfigManager instances.
+// It allows step-by-step configuration of various sources, plugins, and options
+// before building the final ConfigManager.
 type Builder[T any] struct {
-	sources      []any
-	plugins      []plugins.PluginEntry
-	enableWatch  bool
+	// sources holds the configuration sources (file paths, providers, etc.)
+	sources []any
+	// plugins holds manually added plugin entries
+	plugins []plugins.PluginEntry
+	// enableWatch determines if configuration file watching should be enabled
+	enableWatch bool
+	// enablePlugin determines if plugin discovery and initialization should be enabled
 	enablePlugin bool
 }
 
-// NewBuilder 创建新的构建器
+// NewBuilder creates a new Builder instance for configuration type T.
+// The builder is initialized with empty sources and plugins, ready for configuration.
 func NewBuilder[T any]() *Builder[T] {
 	return &Builder[T]{
 		sources: make([]any, 0),
@@ -30,13 +40,17 @@ func NewBuilder[T any]() *Builder[T] {
 	}
 }
 
-// AddFile 添加文件配置源
+// AddFile adds a file path as a configuration source.
+// The file format will be automatically detected based on the file extension.
+// Supported formats include JSON, YAML, TOML, and others supported by koanf.
 func (b *Builder[T]) AddFile(path string) *Builder[T] {
 	b.sources = append(b.sources, path)
 	return b
 }
 
-// AddEnv 添加环境变量配置源
+// AddEnv adds environment variables as a configuration source.
+// Environment variables with the specified prefix will be included,
+// with the prefix stripped and keys converted using dot notation.
 func (b *Builder[T]) AddEnv(prefix string) *Builder[T] {
 	envProvider := env.ProviderWithValue(prefix, ".", func(s string, v string) (string, any) {
 		return s, v
@@ -45,16 +59,18 @@ func (b *Builder[T]) AddEnv(prefix string) *Builder[T] {
 	return b
 }
 
-// AddProvider 添加自定义配置源
+// AddProvider adds a custom koanf.Provider as a configuration source.
+// This allows integration with any provider that implements the koanf.Provider interface.
 func (b *Builder[T]) AddProvider(provider koanf.Provider) *Builder[T] {
 	b.sources = append(b.sources, provider)
 	return b
 }
 
-// AddCliFlags 添加 CLI flags 配置源
+// AddCliFlags adds CLI flags as a configuration source using the urfave/cli library.
 // CLI flags are typically added last to ensure they override other configuration sources.
+// The flags are processed through a wrapper that handles key name mapping and flattening.
 func (b *Builder[T]) AddCliFlags(cmd *cli.Command, delim string) *Builder[T] {
-	// 创建一个包装的 Provider 来处理键名映射
+	// Create a wrapped Provider to handle key name mapping
 	cliProvider := providers.NewCliProviderWrapper(cliflagv3.Provider(cmd, delim), cmd.Name, delim)
 
 	slog.Debug("AddCliFlags: created wrapper", "cmd", cmd.Name, "delim", delim)
@@ -63,34 +79,46 @@ func (b *Builder[T]) AddCliFlags(cmd *cli.Command, delim string) *Builder[T] {
 	return b
 }
 
-// WithWatch 启用配置监听
+// WithWatch enables configuration file watching for automatic reloading.
+// When enabled, the ConfigManager will monitor configuration files for changes
+// and automatically reload the configuration when modifications are detected.
 func (b *Builder[T]) WithWatch() *Builder[T] {
 	b.enableWatch = true
 	return b
 }
 
+// WithPlugin enables plugin discovery and initialization.
+// When enabled, the ConfigManager will automatically discover plugin configurations
+// in the loaded config and initialize the corresponding plugin instances.
 func (b *Builder[T]) WithPlugin() *Builder[T] {
 	b.enablePlugin = true
 	return b
 }
 
-// Build 构建配置管理器
+// Build constructs and returns a ConfigManager instance based on the builder's configuration.
+// It loads the initial configuration, initializes plugins if enabled, and sets up
+// file watching if enabled.
+//
+// Parameters:
+//   - ctx: Context for plugin initialization and other operations
+//
+// Returns a fully configured ConfigManager or an error if building fails.
 func (b *Builder[T]) Build(ctx context.Context) (*ConfigManager[T], error) {
 	if len(b.sources) == 0 {
 		return nil, fmt.Errorf("at least one configuration source is required")
 	}
 
-	// 创建配置管理器
+	// Create configuration manager
 	cm := newManager[T](b.sources...)
 
-	// 加载初始配置
+	// Load initial configuration
 	cfg, err := cm.load()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load initial configuration: %w", err)
 	}
 	cm.cfg.Store(cfg)
 
-	// 启用插件
+	// Enable plugins
 	if b.enablePlugin {
 		err = cm.pluginManager.DiscoverAndRegister(cfg)
 		if err != nil {
@@ -103,7 +131,7 @@ func (b *Builder[T]) Build(ctx context.Context) (*ConfigManager[T], error) {
 		}
 	}
 
-	// 启用监听
+	// Enable watching
 	if b.enableWatch {
 		cm.EnableWatch()
 	}
