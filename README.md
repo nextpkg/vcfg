@@ -265,13 +265,7 @@ Enable automatic configuration reloading:
 cm, err := vcfg.NewBuilder[Config]().
     AddFile("config.yaml").
     WithWatch().  // Enable file watching
-    Build()
-
-// Register callback for configuration changes
-cm.OnConfigChange(func(newConfig *Config) {
-    log.Println("Configuration updated!")
-    // Handle configuration change
-})
+    Build(context.Background())
 ```
 
 ## Thread Safety

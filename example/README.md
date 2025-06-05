@@ -163,12 +163,7 @@ cm, err := vcfg.NewBuilder[MyConfig]().
     Build(context.Background())
 ```
 
-### Configuration Changes
-```go
-cm.OnChange(func(old, new *MyConfig) {
-    log.Printf("Config changed: %+v -> %+v", old, new)
-})
-```
+
 
 ### Plugin Registration
 ```go
