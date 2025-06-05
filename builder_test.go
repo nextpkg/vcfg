@@ -1,6 +1,7 @@
 package vcfg
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,6 +49,48 @@ func TestBuilder_AddEnv(t *testing.T) {
 	// Verify the provider is of correct type
 	_, ok := builder.sources[0].(*env.Env)
 	assert.True(t, ok)
+}
+
+func TestBuilder_AddEnv_KeyMapping(t *testing.T) {
+	// Test environment variable key mapping functionality
+	type NestedConfig struct {
+		Server struct {
+			Host string `json:"host"`
+			Port int    `json:"port"`
+		} `json:"server"`
+		Database struct {
+			Host string `json:"host"`
+			Name string `json:"name"`
+		} `json:"database"`
+	}
+
+	// Set test environment variables
+	os.Setenv("APP_SERVER_HOST", "testhost")
+	os.Setenv("APP_SERVER_PORT", "9090")
+	os.Setenv("APP_DATABASE_HOST", "dbhost")
+	os.Setenv("APP_DATABASE_NAME", "testdb")
+	defer func() {
+		os.Unsetenv("APP_SERVER_HOST")
+		os.Unsetenv("APP_SERVER_PORT")
+		os.Unsetenv("APP_DATABASE_HOST")
+		os.Unsetenv("APP_DATABASE_NAME")
+	}()
+
+	// Create config manager with environment variables
+	cm, err := NewBuilder[NestedConfig]().
+		AddEnv("APP_").
+		Build(context.Background())
+	require.NoError(t, err)
+	defer cm.CloseWithContext(context.Background())
+
+	// Get configuration
+	cfg := cm.Get()
+
+	// Verify environment variables are correctly mapped
+	assert.Equal(t, "testhost", cfg.Server.Host)
+	assert.Equal(t, 9090, cfg.Server.Port)
+	assert.Equal(t, "dbhost", cfg.Database.Host)
+	assert.Equal(t, "testdb", cfg.Database.Name)
 }
 
 func TestBuilder_AddProvider(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/knadh/koanf/providers/cliflagv3"
 	"github.com/knadh/koanf/providers/env"
@@ -53,7 +54,11 @@ func (b *Builder[T]) AddFile(path string) *Builder[T] {
 // with the prefix stripped and keys converted using dot notation.
 func (b *Builder[T]) AddEnv(prefix string) *Builder[T] {
 	envProvider := env.ProviderWithValue(prefix, ".", func(s string, v string) (string, any) {
-		return s, v
+		// Remove the prefix and convert environment variable names to configuration keys
+		// e.g., APP_SERVER_PORT -> server.port
+		key := strings.TrimPrefix(s, prefix)
+		key = strings.ToLower(strings.ReplaceAll(key, "_", "."))
+		return key, v
 	})
 	b.sources = append(b.sources, envProvider)
 	return b
@@ -122,7 +127,7 @@ func (b *Builder[T]) Build(ctx context.Context) (*ConfigManager[T], error) {
 	if b.enablePlugin {
 		err = cm.pluginManager.DiscoverAndRegister(cfg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize plugins: %w", err)
+			return nil, fmt.Errorf("failed to register plugins: %w", err)
 		}
 
 		err = cm.pluginManager.Startup(ctx)

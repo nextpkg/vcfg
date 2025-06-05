@@ -150,7 +150,16 @@ func (pm *PluginManager[T]) DiscoverAndRegister(config *T) error {
 		return nil
 	}
 
-	return discover(reflect.ValueOf(config), "")
+	err := discover(reflect.ValueOf(config), "")
+	if err != nil {
+		return err
+	}
+
+	if len(pm.plugins) == 0 {
+		slog.Info("No plugins discovered for auto-registration")
+	}
+
+	return nil
 }
 
 // Startup starts all registered plugins with context
@@ -216,7 +225,7 @@ func (pm *PluginManager[T]) Reload(ctx context.Context, oldConfig, newConfig *T)
 	pm.mu.RLock()
 	if len(pm.plugins) == 0 {
 		pm.mu.RUnlock()
-		return fmt.Errorf("no plugins registered")
+		return fmt.Errorf("no plugins registered, cannot reload plugins")
 	}
 	pm.mu.RUnlock()
 

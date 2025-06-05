@@ -39,8 +39,8 @@ func main() {
 
 	// Create configuration manager with multiple sources
 	cm, err := vcfg.NewBuilder[AppConfig]().
-		AddFile("config.yaml"). // Primary config file
-		AddEnv("APP").          // Environment variables with APP_ prefix
+		AddFile("config.yaml"). // Primary config file (lowest priority)
+		AddEnv("APP_").         // Environment variables with APP_ prefix (highest priority)
 		Build(context.Background())
 	if err != nil {
 		log.Fatalf("❌ Failed to create config manager: %v", err)

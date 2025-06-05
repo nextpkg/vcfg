@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -44,9 +45,6 @@ type ServerConfig struct {
 		Output string `json:"output" yaml:"output" default:"stdout" validate:"oneof=stdout stderr file both"`
 		File   string `json:"file" yaml:"file" default:"./app.log"`
 	} `json:"logging" yaml:"logging"`
-
-	// Plugin configuration
-	Plugins map[string]interface{} `json:"plugins" yaml:"plugins"`
 }
 
 func main() {
@@ -161,7 +159,6 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 	fmt.Printf("Database: %s (max_conns: %d)\n", config.Database.URL, config.Database.MaxConns)
 	fmt.Printf("Logging: %s level, %s format, output to %s\n", config.Logging.Level, config.Logging.Format, config.Logging.Output)
 	fmt.Printf("Debug: %t\n", config.App.Debug)
-	fmt.Printf("Plugins: %d configured\n", len(config.Plugins))
 
 	// Note: Configuration changes are automatically handled by the file watcher
 	// The configuration will be reloaded when files change
@@ -171,17 +168,13 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 	fmt.Printf("Try modifying the configuration file to see hot reloading in action\n")
 
 	// Keep the server running
-	select {
-	case <-ctx.Done():
-		fmt.Println("\nShutting down server...")
-		return nil
-	}
+	<-ctx.Done()
+
+	return nil
 }
 
 // showConfig displays the current configuration
 func showConfig(ctx context.Context, cmd *cli.Command) error {
-	fmt.Println("Current Configuration:")
-
 	cm, err := vcfg.NewBuilder[ServerConfig]().
 		AddFile(cmd.String("config")).
 		AddEnv("VCFG_").
@@ -193,6 +186,27 @@ func showConfig(ctx context.Context, cmd *cli.Command) error {
 	defer cm.Close()
 
 	config := cm.Get()
+
+	// Output format based on logging.format configuration
+	if config.Logging.Format == "json" {
+		return showConfigJSON(config)
+	}
+	return showConfigText(config)
+}
+
+// showConfigJSON outputs configuration in JSON format
+func showConfigJSON(config *ServerConfig) error {
+	jsonData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config to JSON: %w", err)
+	}
+	fmt.Println(string(jsonData))
+	return nil
+}
+
+// showConfigText outputs configuration in text format
+func showConfigText(config *ServerConfig) error {
+	fmt.Println("Current Configuration:")
 
 	fmt.Printf("\n=== Application ===\n")
 	fmt.Printf("Name: %s\n", config.App.Name)
@@ -218,13 +232,6 @@ func showConfig(ctx context.Context, cmd *cli.Command) error {
 	fmt.Printf("Output: %s\n", config.Logging.Output)
 	fmt.Printf("File: %s\n", config.Logging.File)
 
-	if len(config.Plugins) > 0 {
-		fmt.Printf("\n=== Plugins ===\n")
-		for name, pluginConfig := range config.Plugins {
-			fmt.Printf("%s: %+v\n", name, pluginConfig)
-		}
-	}
-
 	return nil
 }
 
@@ -248,7 +255,7 @@ func validateConfig(ctx context.Context, cmd *cli.Command) error {
 }
 
 // createExampleConfig creates an example configuration file
-func createExampleConfig(ctx context.Context, cmd *cli.Command) error {
+func createExampleConfig(_ context.Context, cmd *cli.Command) error {
 	configFile := cmd.String("config")
 	fmt.Printf("Creating example configuration file: %s\n", configFile)
 

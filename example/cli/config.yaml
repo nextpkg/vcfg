@@ -20,20 +20,7 @@ database:
 
 logging:
   level: "info"
-  format: "json"
+  format: "text"
   output: "stdout"
   file: "./logs/app.log"
 
-# Plugin configuration
-plugins:
-  logger:
-    type: "logger"
-    level: "debug"
-    format: "json"
-    output: "both"
-    file_path: "./logs/app.log"
-    add_source: true
-    enable_rotation: true
-    rotate_interval: "daily"
-    max_file_size: 104857600  # 100MB
-    max_age: 7

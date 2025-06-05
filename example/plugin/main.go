@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -15,12 +16,14 @@ import (
 // AppConfig defines the application configuration with plugin support
 type AppConfig struct {
 	App struct {
-		Name    string `json:"name" yaml:"name" default:"Plugin-Example"`
-		Version string `json:"version" yaml:"version" default:"1.0.0"`
+		Name    string `json:"name" yaml:"name"`
+		Version string `json:"version" yaml:"version"`
 	} `json:"app" yaml:"app"`
 
-	// Plugin configuration section
-	Plugins map[string]interface{} `json:"plugins" yaml:"plugins"`
+	// Plugin configuration section - plugins are automatically discovered
+	// by the plugin system based on struct fields that implement plugins.Config interface
+	Metrics MetricsConfig `json:"metrics" yaml:"metrics,omitempty"`
+	Health  HealthConfig  `json:"health" yaml:"health,omitempty"`
 }
 
 // ===== Custom Metrics Plugin =====
@@ -297,13 +300,18 @@ func (p *HealthPlugin) GetHealth() map[string]bool {
 // Register plugins
 func init() {
 	// Register custom plugins with the plugin system
-	plugins.RegisterPluginType[*MetricsPlugin, *MetricsConfig]("metrics", &MetricsPlugin{}, &MetricsConfig{})
+	plugins.RegisterPluginType("metrics", &MetricsPlugin{}, &MetricsConfig{})
 
 	// Register health check plugin
-	plugins.RegisterPluginType[*HealthPlugin, *HealthConfig]("health", &HealthPlugin{}, &HealthConfig{})
+	plugins.RegisterPluginType("health", &HealthPlugin{}, &HealthConfig{})
 }
 
 func main() {
+	// Set log level to Debug to see configuration change events
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})))
+
 	fmt.Println("VCFG Plugin Development Example")
 	fmt.Println("==============================")
 
@@ -315,19 +323,27 @@ func main() {
 	fmt.Println("\n1. Loading configuration with custom plugins...")
 
 	// Build configuration manager with plugins enabled
-	cm, err := vcfg.NewBuilder[AppConfig]().
+	cm := vcfg.NewBuilder[AppConfig]().
 		AddFile("plugin-config.yaml").
 		WithPlugin(). // Enable plugin system
 		WithWatch().  // Enable file watching for hot reload
-		Build(context.Background())
-	if err != nil {
-		log.Fatal("Failed to build config:", err)
-	}
+		MustBuild()
 	defer cm.Close()
 
 	config := cm.Get()
 	fmt.Printf("App: %s v%s\n", config.App.Name, config.App.Version)
-	fmt.Printf("Plugins loaded: %d\n", len(config.Plugins))
+
+	// Count active plugins
+	pluginCount := 0
+	if config.Metrics.Type != "" {
+		pluginCount++
+		fmt.Printf("Metrics plugin loaded on port %d\n", config.Metrics.Port)
+	}
+	if config.Health.Type != "" {
+		pluginCount++
+		fmt.Printf("Health plugin loaded on port %d\n", config.Health.Port)
+	}
+	fmt.Printf("Total plugins loaded: %d\n", pluginCount)
 
 	// Note: Configuration changes are automatically handled by the file watcher
 	// Plugins will be automatically reloaded when configuration changes
@@ -353,41 +369,30 @@ func main() {
 // createPluginConfig creates an example configuration file with plugin settings
 func createPluginConfig() error {
 	config := `# VCFG Plugin Development Example Configuration
-
 app:
   name: "Plugin-Development-Example"
   version: "1.0.0"
 
-# Plugin configurations
-plugins:
-  # Custom metrics plugin
-  metrics:
-    type: "metrics"
-    port: 9090
-    path: "/metrics"
-    interval: "5s"
-    enabled: true
+# Custom metrics plugin
+metrics:
+  type: "metrics"
+  port: 9090
+  path: "/metrics"
+  interval: "5s"
+  enabled: true
 
-  # Custom health check plugin
-  health:
-    type: "health"
-    port: 8081
-    path: "/health"
-    checks:
-      - "database"
-      - "redis"
-      - "external_api"
-      - "file_system"
-    timeout: "3s"
-    interval: "8s"
-
-  # Built-in logger plugin
-  logger:
-    type: "logger"
-    level: "debug"
-    format: "text"
-    output: "stdout"
-    add_source: false
+# Custom health check plugin
+health:
+  type: "health"
+  port: 8081
+  path: "/health"
+  checks:
+    - "database"
+    - "redis"
+    - "external_api"
+    - "file_system"
+  timeout: "3s"
+  interval: "8s"
 `
 
 	return os.WriteFile("plugin-config.yaml", []byte(config), 0644)

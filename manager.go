@@ -173,7 +173,7 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 						return
 					}
 
-					slog.Debug("Configuration change detected", "event", event)
+					slog.Info("Configuration change detected", "event", event)
 
 					// Get old configuration before reload
 					oldConfig := cm.Get()
@@ -196,7 +196,7 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 						}
 					}
 
-					slog.Debug("Configuration reloaded successfully")
+					slog.Info("Configuration reloaded successfully")
 				})
 
 				if err != nil {

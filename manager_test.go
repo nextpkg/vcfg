@@ -8,13 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/nextpkg/vcfg/providers"
 )
 
 type TestConfig struct {
@@ -219,15 +216,6 @@ func TestConfigManager_EnableAndStartPlugins(t *testing.T) {
 	// Test StartPlugins
 	err = cm.StartPlugins(context.Background())
 	assert.NoError(t, err)
-}
-
-func createTestManager(t *testing.T) *ConfigManager[TestConfig] {
-	provider := rawbytes.Provider([]byte(`{"name":"test"}`))
-	providerConfig := providers.ProviderConfig{
-		Provider: provider,
-		Parser:   json.Parser(),
-	}
-	return newManager[TestConfig](providerConfig)
 }
 
 func TestConfigManager_MustEnableAndStartPlugins(t *testing.T) {

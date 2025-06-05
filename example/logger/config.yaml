@@ -5,3 +5,6 @@ app:
   name: "Logger Demo App"
   version: "1.0.0"
   debug: true
+logger:
+  level: "DEBUG"
+  format: "text"

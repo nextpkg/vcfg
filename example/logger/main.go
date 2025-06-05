@@ -31,12 +31,7 @@ func main() {
 	config := cm.Get()
 	fmt.Printf("Logger config: %#v\n", config.Logger)
 
-	if err := cm.EnablePlugins(); err != nil {
-		panic(err)
-	}
-	if err := cm.StartPlugins(context.Background()); err != nil {
-		panic(err)
-	}
+	cm.MustEnableAndStartPlugins()
 
 	// Get the logger instance
 	logger := builtins.GetLogger()

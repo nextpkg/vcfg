@@ -84,7 +84,9 @@ type AppConfig struct {
         URL      string `json:"url" validate:"required"`
         MaxConns int    `json:"max_conns" default:"10"`
     } `json:"database"`
-    Plugins map[string]interface{} `json:"plugins"`
+    // Plugin configurations are automatically discovered by the plugin system
+    // based on struct fields that implement plugins.Config interface
+    Logger *LoggerConfig `json:"logger,omitempty"`
 }
 
 func main() {

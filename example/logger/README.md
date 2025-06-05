@@ -67,7 +67,6 @@ package main
 
 import (
     "github.com/nextpkg/vcfg"
-    _ "github.com/nextpkg/vcfg/plugins/builtins"
     "github.com/nextpkg/vcfg/plugins/builtins"
 )
 
