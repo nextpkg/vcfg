@@ -20,7 +20,10 @@ func NewPluginManager[T any]() *PluginManager[T] {
 	}
 }
 
-func (pm *PluginManager[T]) Initialize(config *T) error {
+// DiscoverAndRegister automatically discovers plugin configurations from the provided config struct
+// and registers corresponding plugin instances. It uses reflection to traverse the config structure
+// and creates plugin instances for fields that implement the Config interface.
+func (pm *PluginManager[T]) DiscoverAndRegister(config *T) error {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -193,12 +196,12 @@ func (pm *PluginManager[T]) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// HandleSmartConfigChange intelligently handles configuration changes by automatically
-// detecting which plugin configurations have changed and reloading only those plugins.
+// Reload intelligently handles configuration changes by automatically
+// detecting which plugins need to be reloaded based on their configuration changes.
 // This method uses reflection to recursively iterate through configuration struct fields
 // and automatically reloads plugins when their corresponding configuration implements
 // the Config interface and has changed.
-func (pm *PluginManager[T]) HandleSmartConfigChange(oldConfig, newConfig *T) error {
+func (pm *PluginManager[T]) Reload(ctx context.Context, oldConfig, newConfig *T) error {
 	pm.mu.RLock()
 	if len(pm.plugins) == 0 {
 		pm.mu.RUnlock()
@@ -215,12 +218,12 @@ func (pm *PluginManager[T]) HandleSmartConfigChange(oldConfig, newConfig *T) err
 	newValue := reflect.ValueOf(newConfig)
 
 	// Start recursive traversal
-	return pm.handleConfigChangeRecursive(oldValue, newValue, "")
+	return pm.handleConfigChangeRecursive(ctx, oldValue, newValue, "")
 }
 
 // handleConfigChangeRecursive recursively traverses configuration structures to detect
 // plugin configuration changes at any nesting level with multi-instance support
-func (pm *PluginManager[T]) handleConfigChangeRecursive(oldValue, newValue reflect.Value, fieldPath string) error {
+func (pm *PluginManager[T]) handleConfigChangeRecursive(ctx context.Context, oldValue, newValue reflect.Value, fieldPath string) error {
 	// Handle pointers
 	if oldValue.Kind() == reflect.Ptr {
 		oldValue = oldValue.Elem()
@@ -256,10 +259,10 @@ func (pm *PluginManager[T]) handleConfigChangeRecursive(oldValue, newValue refle
 
 			if iOldField != nil {
 				if config, ok := iOldField.(Config); ok && !reflect.DeepEqual(iOldField, iNewField) {
-					return pm.reloadPluginConfig(config, iNewField, fieldPath)
+					return pm.reloadPluginConfig(ctx, config, iNewField, fieldPath)
 				} else {
 					// If not a plugin config, recursively check nested structures
-					return pm.handleConfigChangeRecursive(vOldField, vNewField, fieldPath)
+					return pm.handleConfigChangeRecursive(ctx, vOldField, vNewField, fieldPath)
 				}
 			}
 		}
@@ -269,7 +272,7 @@ func (pm *PluginManager[T]) handleConfigChangeRecursive(oldValue, newValue refle
 }
 
 // reloadPluginConfig handles the plugin reload logic
-func (pm *PluginManager[T]) reloadPluginConfig(config Config, newConfig any, fieldPath string) error {
+func (pm *PluginManager[T]) reloadPluginConfig(ctx context.Context, config Config, newConfig any, fieldPath string) error {
 	pluginType := getConfigType(config)
 
 	// Use field path as instance name for consistency with auto-discovery
@@ -290,7 +293,7 @@ func (pm *PluginManager[T]) reloadPluginConfig(config Config, newConfig any, fie
 
 	if exists && entry.started {
 		// Reload registered plugin
-		if err := entry.Plugin.Reload(context.Background(), newConfig); err != nil {
+		if err := entry.Plugin.Reload(ctx, newConfig); err != nil {
 			return fmt.Errorf("smart plugin reload failed, key=%s, err=%w", pluginKey, err)
 		}
 

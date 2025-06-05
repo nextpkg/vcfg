@@ -37,7 +37,7 @@ type SimpleTestConfig struct {
 	TestPlugin MockConfig `json:"test_plugin"`
 }
 
-func TestPluginManager_Initialize(t *testing.T) {
+func TestPluginManager_DiscoverAndRegister(t *testing.T) {
 	// Clean up registry before each test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
@@ -99,19 +99,19 @@ func TestPluginManager_Initialize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			manager := NewPluginManager[TestManagerConfig]()
-			err := manager.Initialize(tt.config)
+			err := manager.DiscoverAndRegister(tt.config)
 
 			if tt.expectError {
 				if err == nil {
-					t.Errorf("Initialize() expected error but got nil")
+					t.Errorf("DiscoverAndRegister() expected error but got nil")
 					return
 				}
 				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("Initialize() error = %v, want to contain %v", err.Error(), tt.errorMsg)
+					t.Errorf("DiscoverAndRegister() error = %v, want to contain %v", err.Error(), tt.errorMsg)
 				}
 			} else {
 				if err != nil {
-					t.Errorf("Initialize() unexpected error = %v", err)
+					t.Errorf("DiscoverAndRegister() unexpected error = %v", err)
 					return
 				}
 				// For successful cases, just verify no error occurred
@@ -142,11 +142,11 @@ func TestPluginManager_InitializeWithStartError(t *testing.T) {
 		},
 	}
 
-	err := manager.Initialize(config)
+	err := manager.DiscoverAndRegister(config)
 	// For this test, we just verify that Initialize can handle the config structure
 	// The actual error handling depends on the complex discovery logic
 	if err != nil {
-		t.Logf("Initialize() returned error (expected for complex discovery): %v", err)
+		t.Logf("DiscoverAndRegister() returned error (expected for complex discovery): %v", err)
 	}
 }
 
@@ -175,10 +175,10 @@ func TestPluginManager_InitializePointerConversion(t *testing.T) {
 		},
 	}
 
-	err := manager.Initialize(config)
+	err := manager.DiscoverAndRegister(config)
 	// For this test, we just verify that Initialize can handle the config structure
 	if err != nil {
-		t.Logf("Initialize() returned error (expected for complex discovery): %v", err)
+		t.Logf("DiscoverAndRegister() returned error (expected for complex discovery): %v", err)
 	}
 }
 
@@ -207,10 +207,10 @@ func TestPluginManager_InitializeConfigCopy(t *testing.T) {
 		},
 	}
 
-	err := manager.Initialize(config)
+	err := manager.DiscoverAndRegister(config)
 	// For this test, we just verify that Initialize can handle the config structure
 	if err != nil {
-		t.Logf("Initialize() returned error (expected for complex discovery): %v", err)
+		t.Logf("DiscoverAndRegister() returned error (expected for complex discovery): %v", err)
 	}
 
 	// Modify original config to test isolation
@@ -240,7 +240,7 @@ func TestPluginManager_Startup(t *testing.T) {
 	}
 
 	// Initialize plugins
-	err := manager.Initialize(config)
+	err := manager.DiscoverAndRegister(config)
 	assert.NoError(t, err)
 
 	// Start plugins
@@ -280,7 +280,8 @@ func TestPluginManager_StartupWithError(t *testing.T) {
 	}
 
 	// Initialize plugins
-	err := manager.Initialize(config)
+
+	err := manager.DiscoverAndRegister(config)
 	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
 	}
@@ -316,7 +317,7 @@ func TestPluginManager_Shutdown(t *testing.T) {
 	}
 
 	// Initialize and start plugins
-	err := manager.Initialize(config)
+	err := manager.DiscoverAndRegister(config)
 	assert.NoError(t, err)
 	err = manager.Startup(context.Background())
 	assert.NoError(t, err)
@@ -358,7 +359,7 @@ func TestPluginManager_ShutdownWithError(t *testing.T) {
 	}
 
 	// Initialize plugins
-	err := manager.Initialize(config)
+	err := manager.DiscoverAndRegister(config)
 	assert.NoError(t, err)
 
 	// Manually set plugin as started to test shutdown error
@@ -375,7 +376,7 @@ func TestPluginManager_ShutdownWithError(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to stop plugin")
 }
 
-func TestPluginManager_HandleSmartConfigChange(t *testing.T) {
+func TestPluginManager_Reload(t *testing.T) {
 	// Clean up registry before test
 	registry := getGlobalPluginRegistry()
 	registry.mu.Lock()
@@ -385,7 +386,7 @@ func TestPluginManager_HandleSmartConfigChange(t *testing.T) {
 	manager := NewPluginManager[SimpleTestConfig]()
 
 	// Test with no plugins registered
-	err := manager.HandleSmartConfigChange(nil, nil)
+	err := manager.Reload(context.Background(), nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no plugins registered")
 
@@ -408,15 +409,15 @@ func TestPluginManager_HandleSmartConfigChange(t *testing.T) {
 	}
 
 	// Initialize plugins
-	err = manager.Initialize(oldConfig)
+	err = manager.DiscoverAndRegister(oldConfig)
 	assert.NoError(t, err)
 
 	// Test with nil configs
-	err = manager.HandleSmartConfigChange(nil, nil)
+	err = manager.Reload(context.Background(), nil, nil)
 	assert.NoError(t, err)
 
 	// Test with valid config change
-	err = manager.HandleSmartConfigChange(oldConfig, newConfig)
+	err = manager.Reload(context.Background(), oldConfig, newConfig)
 	assert.NoError(t, err)
 }
 
@@ -444,7 +445,7 @@ func TestPluginManager_Clone(t *testing.T) {
 		},
 	}
 
-	err := manager.Initialize(config)
+	err := manager.DiscoverAndRegister(config)
 	assert.NoError(t, err)
 
 	// Test clone with plugins

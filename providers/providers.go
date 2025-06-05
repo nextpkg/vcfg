@@ -11,6 +11,11 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
+// ParserProvider interface for providers that can specify their required parser
+type ParserProvider interface {
+	RequiredParser() koanf.Parser
+}
+
 // ProviderConfig holds a provider and its parser
 type ProviderConfig struct {
 	Provider koanf.Provider
@@ -40,10 +45,27 @@ func (f *ProviderFactory) CreateProviders(sources ...any) ([]ProviderConfig, err
 				Parser:   parser,
 			})
 		case koanf.Provider:
-			// Direct provider
+			// Direct provider - use interface-driven approach
+			var parser koanf.Parser
+
+			// Check if provider implements ParserProvider interface
+			if pp, ok := s.(ParserProvider); ok {
+				parser = pp.RequiredParser()
+			} else {
+				// Check provider type to determine if it needs a parser
+				providerType := fmt.Sprintf("%T", s)
+				// Env providers and some others don't need parsers (they implement Read() directly)
+				if providerType == "*env.Env" {
+					parser = nil
+				} else {
+					// Fallback: use default parser (JSON) for providers that need parsing
+					parser = json.Parser()
+				}
+			}
+
 			configs = append(configs, ProviderConfig{
 				Provider: s,
-				Parser:   nil, // Provider should handle parsing
+				Parser:   parser,
 			})
 		default:
 			return nil, fmt.Errorf("unsupported source type: %T", source)

@@ -58,7 +58,7 @@ func main() {
 	slog.Info("Plugins enabled successfully")
 
 	// Start all registered plugins
-	if err := configManager.StartPlugins(); err != nil {
+	if err := configManager.StartPlugins(context.Background()); err != nil {
 		slog.Error("Failed to start plugins", "error", err)
 		return
 	}

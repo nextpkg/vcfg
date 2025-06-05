@@ -27,7 +27,6 @@ type (
 		mu            sync.RWMutex
 		watchers      []func() // cleanup functions for watchers
 		pluginManager *plugins.PluginManager[T]
-		ctx           context.Context
 	}
 
 	// Watcher interface for providers that support watching configuration changes
@@ -60,7 +59,6 @@ func newManager[T any](sources ...any) *ConfigManager[T] {
 		koanf:         koanf.New("."),
 		watchers:      make([]func(), 0),
 		pluginManager: plugins.NewPluginManager[T](),
-		ctx:           context.Background(),
 	}
 }
 
@@ -158,7 +156,7 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 
 					// Handle plugin configuration changes intelligently
 					if oldConfig != nil {
-						if err := cm.pluginManager.HandleSmartConfigChange(oldConfig, newConfig); err != nil {
+						if err := cm.pluginManager.Reload(context.Background(), oldConfig, newConfig); err != nil {
 							slog.Error("Failed to handle smart plugin reload", "error", err)
 							return
 						}
@@ -175,6 +173,15 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 				// Store cleanup function
 				if unwatcher, ok := providerConfig.Provider.(Unwatcher); ok {
 					cm.watchers = append(cm.watchers, unwatcher.Unwatch)
+				} else {
+					// For providers like koanf file provider that have Unwatch() error method
+					if fileProvider, ok := providerConfig.Provider.(interface{ Unwatch() error }); ok {
+						cm.watchers = append(cm.watchers, func() {
+							if err := fileProvider.Unwatch(); err != nil {
+								slog.Error("Failed to unwatch", "error", err)
+							}
+						})
+					}
 				}
 			}
 		}
@@ -185,6 +192,9 @@ func (cm *ConfigManager[T]) EnableWatch() *ConfigManager[T] {
 
 // DisableWatch stops monitoring changes of all configuration providers.
 func (cm *ConfigManager[T]) DisableWatch() {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	for _, cleanup := range cm.watchers {
 		cleanup()
 	}
@@ -220,31 +230,36 @@ func (cm *ConfigManager[T]) EnablePlugins() error {
 	}
 
 	// Use auto-registration
-	return cm.pluginManager.Initialize(config)
+	return cm.pluginManager.DiscoverAndRegister(config)
 }
 
 // StartPlugins starts all registered plugins
 // This method should be called after EnablePlugins to start the plugin instances
-func (cm *ConfigManager[T]) StartPlugins() error {
-	return cm.pluginManager.Startup(cm.ctx)
+func (cm *ConfigManager[T]) StartPlugins(ctx context.Context) error {
+	return cm.pluginManager.Startup(ctx)
 }
 
 // StopPlugins stops all running plugins
 // This method gracefully stops all plugin instances
-func (cm *ConfigManager[T]) StopPlugins() error {
-	return cm.pluginManager.Shutdown(cm.ctx)
+func (cm *ConfigManager[T]) StopPlugins(ctx context.Context) error {
+	return cm.pluginManager.Shutdown(ctx)
 }
 
-// MustEnableAndStartPluginWithContext enables and starts all plugins with context, panics on error
-// This is a convenience method that combines EnablePlugins and StartPlugins with context support
-func (cm *ConfigManager[T]) MustEnableAndStartPluginWithContext(ctx context.Context) {
+// MustEnableAndStartPlugins enables and starts all plugins, panics on error
+// This is a convenience method that combines EnablePlugins and StartPlugins
+func (cm *ConfigManager[T]) MustEnableAndStartPlugins() {
 	if err := cm.EnablePlugins(); err != nil {
 		panic(err)
 	}
 
-	if err := cm.StartPlugins(); err != nil {
+	if err := cm.StartPlugins(context.Background()); err != nil {
 		panic(err)
 	}
+}
+
+// Close closes the configuration manager with default context, including all plugins and watchers
+func (cm *ConfigManager[T]) Close() error {
+	return cm.CloseWithContext(context.Background())
 }
 
 // CloseWithContext closes the configuration manager with context, including all plugins and watchers
@@ -257,5 +272,5 @@ func (cm *ConfigManager[T]) CloseWithContext(ctx context.Context) error {
 	cm.DisableWatch()
 
 	// 关闭所有插件
-	return cm.pluginManager.Shutdown(cm.ctx)
+	return cm.pluginManager.Shutdown(ctx)
 }

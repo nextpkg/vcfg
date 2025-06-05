@@ -31,7 +31,7 @@ func TestPointerConfigDetection(t *testing.T) {
 	// We need to manually test the plugin discovery logic
 	// since we can't easily set config in the manager
 	pm := plugins.NewPluginManager[TestAppConfigWithPointers]()
-	err := pm.Initialize(&testConfig)
+	err := pm.DiscoverAndRegister(&testConfig)
 
 	// Verify that an error occurred
 	if err == nil {
@@ -79,7 +79,7 @@ func TestValueConfigStillWorks(t *testing.T) {
 
 	// Create plugin manager and test directly
 	pm := plugins.NewPluginManager[AppConfig]()
-	err := pm.Initialize(&testConfig)
+	err := pm.DiscoverAndRegister(&testConfig)
 
 	// Verify that no error occurred
 	if err != nil {

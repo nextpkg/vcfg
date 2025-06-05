@@ -84,7 +84,7 @@ func main() {
 	cm, err := vcfg.NewBuilder[AppConfig]().
 		AddFile("config.yaml").
 		WithWatch(). // Enable hot reload
-		Build()
+		Build(context.Background())
 	if err != nil {
 		log.Fatalf("❌ Failed to create config manager: %v", err)
 	}

@@ -27,5 +27,5 @@ go.work.sum
 .idea
 .vscode
 
-demo
-main
+*_demo
+*_main

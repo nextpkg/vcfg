@@ -75,7 +75,7 @@ func (b *Builder[T]) WithPlugin() *Builder[T] {
 }
 
 // Build 构建配置管理器
-func (b *Builder[T]) Build() (*ConfigManager[T], error) {
+func (b *Builder[T]) Build(ctx context.Context) (*ConfigManager[T], error) {
 	if len(b.sources) == 0 {
 		return nil, fmt.Errorf("at least one configuration source is required")
 	}
@@ -92,12 +92,12 @@ func (b *Builder[T]) Build() (*ConfigManager[T], error) {
 
 	// 启用插件
 	if b.enablePlugin {
-		err = cm.pluginManager.Initialize(cfg)
+		err = cm.pluginManager.DiscoverAndRegister(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize plugins: %w", err)
 		}
 
-		err = cm.pluginManager.Startup(context.Background())
+		err = cm.pluginManager.Startup(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to startup plugins: %w", err)
 		}
@@ -113,7 +113,7 @@ func (b *Builder[T]) Build() (*ConfigManager[T], error) {
 
 // MustBuild 构建配置管理器，失败时panic
 func (b *Builder[T]) MustBuild() *ConfigManager[T] {
-	cm, err := b.Build()
+	cm, err := b.Build(context.Background())
 	if err != nil {
 		panic(err)
 	}

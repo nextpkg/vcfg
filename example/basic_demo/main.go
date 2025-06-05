@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -40,11 +41,11 @@ func main() {
 	cm, err := vcfg.NewBuilder[AppConfig]().
 		AddFile("config.yaml"). // Primary config file
 		AddEnv("APP").          // Environment variables with APP_ prefix
-		Build()
+		Build(context.Background())
 	if err != nil {
 		log.Fatalf("❌ Failed to create config manager: %v", err)
 	}
-	defer cm.Close()
+	defer cm.CloseWithContext(context.Background())
 
 	fmt.Println("✅ Configuration loaded successfully")
 

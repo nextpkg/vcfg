@@ -67,11 +67,11 @@ func main() {
 			manager, err := vcfg.NewBuilder[Config]().
 				AddFile(configFile).  // File config (lower priority)
 				AddCliFlags(cmd, ""). // CLI flags (higher priority) - empty delimiter to avoid command name prefix
-				Build()
+				Build(context.Background())
 			if err != nil {
 				return fmt.Errorf("failed to build config: %w", err)
 			}
-			defer manager.Close()
+			defer manager.CloseWithContext(context.Background())
 
 			// Get merged configuration
 			config := manager.Get()
