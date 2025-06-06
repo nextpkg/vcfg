@@ -106,12 +106,29 @@ func (fw *FileWatcher) Unwatch() error {
 
 // processEvents handles fsnotify events and filters them for the target file
 func (fw *FileWatcher) processEvents() {
+	// Get the watcher channels once at the start to avoid race conditions
+	fw.mu.RLock()
+	watcher := fw.watcher
+	fw.mu.RUnlock()
+
+	if watcher == nil {
+		return
+	}
+
 	for {
 		select {
-		case event, ok := <-fw.watcher.Events:
+		case event, ok := <-watcher.Events:
 			if !ok {
 				return // Watcher closed
 			}
+
+			// Check if we're still watching
+			fw.mu.RLock()
+			if !fw.watching {
+				fw.mu.RUnlock()
+				return
+			}
+			fw.mu.RUnlock()
 
 			// Filter events to only process our target file
 			if fw.isTargetFileEvent(event) {
@@ -128,12 +145,18 @@ func (fw *FileWatcher) processEvents() {
 				}
 			}
 
-		case err, ok := <-fw.watcher.Errors:
+		case err, ok := <-watcher.Errors:
 			if !ok {
 				return // Watcher closed
 			}
 
+			// Check if we're still watching
 			fw.mu.RLock()
+			if !fw.watching {
+				fw.mu.RUnlock()
+				return
+			}
+
 			cb := fw.callback
 			fw.mu.RUnlock()
 

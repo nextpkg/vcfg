@@ -228,9 +228,7 @@ func (p *MyPlugin) Shutdown(ctx context.Context) error {
 
 // Register plugin
 func init() {
-    plugins.RegisterPlugin[MyPlugin, MyPluginConfig]("myplugin", plugins.RegisterOptions{
-        AutoDiscover: true,
-    })
+    plugins.RegisterPluginType("myplugin", &MyPlugin{}, &MyPluginConfig{})
 }
 ```
 
@@ -265,10 +263,10 @@ type Config struct {
 Enable automatic configuration reloading:
 
 ```go
-cm, err := vcfg.NewBuilder[Config]().
+cm := vcfg.NewBuilder[Config]().
     AddFile("config.yaml").
     WithWatch().  // Enable file watching
-    Build(context.Background())
+    MustBuild()
 ```
 
 ## Thread Safety
@@ -295,7 +293,7 @@ go func() {
 // Using Builder for error handling
 cm, err := vcfg.NewBuilder[Config]().
     AddFile("config.yaml").
-    Build()
+    Build(context.Background())
 if err != nil {
     log.Fatal("Failed to build config:", err)
 }

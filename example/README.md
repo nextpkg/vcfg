@@ -16,7 +16,6 @@ This directory contains examples demonstrating various features and usage patter
 **Files:**
 - `main.go` - Complete basic usage example
 - `config.yaml` - Sample YAML configuration
-- `config.json` - Sample JSON configuration
 
 **Run the example:**
 ```bash
@@ -157,17 +156,17 @@ config := vcfg.MustLoad[MyConfig]("config.yaml")
 
 ### Builder Pattern
 ```go
-cm, err := vcfg.NewBuilder[MyConfig]().
+config := vcfg.NewBuilder[MyConfig]().
     AddFile("config.yaml").
     AddEnv("APP").
-    Build(context.Background())
+    MustBuild()
 ```
 
 
 
 ### Plugin Registration
 ```go
-vcfg.RegisterPlugin("my-plugin", &MyPlugin{})
+plugins.RegisterPluginType("my-plugin", &MyPlugin{}, &MyConfig{})
 ```
 
 ## Troubleshooting
@@ -190,9 +189,7 @@ vcfg.RegisterPlugin("my-plugin", &MyPlugin{})
 
 1. Enable debug logging:
    ```go
-   slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-       Level: slog.LevelDebug,
-   })))
+   slogs.SetLevel(slog.LevelDebug)
    ```
 
 2. Use validation:
@@ -200,14 +197,6 @@ vcfg.RegisterPlugin("my-plugin", &MyPlugin{})
    func (c *Config) Validate() error {
        // Add validation logic
        return nil
-   }
-   ```
-
-3. Check configuration sources:
-   ```go
-   sources := cm.GetSources()
-   for _, source := range sources {
-       fmt.Printf("Source: %s\n", source)
    }
    ```
 

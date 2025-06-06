@@ -212,7 +212,9 @@ func (pm *PluginManager[T]) Shutdown(ctx context.Context) error {
 		)
 	}
 
-	slogs.Info("All plugins stopped", "count", len(pm.plugins))
+	if len(pm.plugins) > 0 {
+		slogs.Info("All plugins stopped", "count", len(pm.plugins))
+	}
 
 	return nil
 }

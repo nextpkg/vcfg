@@ -32,7 +32,7 @@ sleep 3
 
 echo "🔄 Making first configuration change..."
 echo "   Changing server port from 8080 to 9090"
-sed -i 's/port: 8080/port: 9090/' config.yaml
+sed -i '' 's/port: 8080/port: 9090/' config.yaml
 echo "✅ Port changed"
 
 # Wait a bit
@@ -41,7 +41,7 @@ sleep 2
 echo ""
 echo "🔄 Making second configuration change..."
 echo "   Changing host from localhost to 127.0.0.1"
-sed -i 's/localhost/127.0.0.1/g' config.yaml
+sed -i '' 's/localhost/127.0.0.1/g' config.yaml
 echo "✅ Host changed"
 
 # Wait a bit
@@ -50,7 +50,7 @@ sleep 2
 echo ""
 echo "🔄 Making third configuration change..."
 echo "   Changing database name from watchdemo to newdemo"
-sed -i 's/watchdemo/newdemo/' config.yaml
+sed -i '' 's/watchdemo/newdemo/' config.yaml
 echo "✅ Database name changed"
 
 # Wait a bit
